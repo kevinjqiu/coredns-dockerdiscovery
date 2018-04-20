@@ -1,7 +1,8 @@
 package dockerdiscovery
 
 import (
-	"fmt"
+	"github.com/coredns/coredns/core/dnsserver"
+	"github.com/coredns/coredns/plugin"
 
 	"github.com/mholt/caddy"
 )
@@ -10,13 +11,13 @@ const defaultDockerSocketPath = "/var/run/docker.sock"
 const defaultDockerDomain = "docker.local"
 
 func init() {
-	caddy.RegisterPlugin("dockerdiscovery", caddy.Plugin{
+	caddy.RegisterPlugin("docker", caddy.Plugin{
 		ServerType: "dns",
 		Action:     setup,
 	})
 }
 
-func createPlugin(c *caddy.Controller) (*DockerDiscovery, error) {
+func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 	dd := DockerDiscovery{
 		dockerSocketPath: defaultDockerSocketPath,
 		dockerDomain:     defaultDockerDomain,
@@ -29,22 +30,22 @@ func createPlugin(c *caddy.Controller) (*DockerDiscovery, error) {
 		}
 
 		if len(args) > 1 {
-			return nil, c.ArgErr()
+			return dd, c.ArgErr()
 		}
 
 		for c.NextBlock() {
 			switch c.Val() {
 			case "domain":
 				if !c.NextArg() {
-					return nil, c.ArgErr()
+					return dd, c.ArgErr()
 				}
 				dd.dockerDomain = c.Val()
 			default:
-				return nil, c.Errf("unknown property: '%s'", c.Val())
+				return dd, c.Errf("unknown property: '%s'", c.Val())
 			}
 		}
 	}
-	return &dd, nil
+	return dd, nil
 }
 
 func setup(c *caddy.Controller) error {
@@ -52,6 +53,9 @@ func setup(c *caddy.Controller) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(dd)
+
+	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
+		return dd
+	})
 	return nil
 }
