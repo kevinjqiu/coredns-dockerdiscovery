@@ -4,11 +4,13 @@ import (
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 
+	dockerapi "github.com/fsouza/go-dockerclient"
+
 	"github.com/mholt/caddy"
 )
 
 const defaultDockerEndpoint = "unix:///var/run/docker.sock"
-const defaultDockerDomain = "docker.local"
+const defaultDockerDomain = "docker.local."
 
 func init() {
 	caddy.RegisterPlugin("docker", caddy.Plugin{
@@ -17,6 +19,7 @@ func init() {
 	})
 }
 
+// TODO(kevinjqiu): add docker endpoint verification
 func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 	dd := DockerDiscovery{
 		dockerEndpoint: defaultDockerEndpoint,
@@ -45,6 +48,11 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 			}
 		}
 	}
+	dockerClient, err := dockerapi.NewClient(dd.dockerEndpoint)
+	if err != nil {
+		return dd, err
+	}
+	dd.dockerClient = dockerClient
 	return dd, nil
 }
 

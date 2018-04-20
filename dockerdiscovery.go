@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/coredns/coredns/plugin"
+	dockerapi "github.com/fsouza/go-dockerclient"
 	"github.com/miekg/dns"
 )
 
@@ -12,6 +13,7 @@ type DockerDiscovery struct {
 	Next           plugin.Handler
 	dockerEndpoint string
 	dockerDomain   string
+	dockerClient   *dockerapi.Client
 }
 
 // ServeDNS implements plugin.Handler
