@@ -9,9 +9,9 @@ import (
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
-	Next             plugin.Handler
-	dockerSocketPath string
-	dockerDomain     string
+	Next           plugin.Handler
+	dockerEndpoint string
+	dockerDomain   string
 }
 
 // ServeDNS implements plugin.Handler

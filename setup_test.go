@@ -8,35 +8,35 @@ import (
 )
 
 type setupDockerDiscoveryTestCase struct {
-	configBlock              string
-	expectedDockerSocketPath string
-	expectedDockerDomain     string
+	configBlock            string
+	expectedDockerEndpoint string
+	expectedDockerDomain   string
 }
 
 func TestSetupDockerDiscovery(t *testing.T) {
 	testCases := []setupDockerDiscoveryTestCase{
 		setupDockerDiscoveryTestCase{
 			"docker",
-			defaultDockerSocketPath,
+			defaultDockerEndpoint,
 			defaultDockerDomain,
 		},
 		setupDockerDiscoveryTestCase{
-			"docker /var/run/docker.sock.backup",
-			"/var/run/docker.sock.backup",
+			"docker unix:///var/run/docker.sock.backup",
+			"unix:///var/run/docker.sock.backup",
 			defaultDockerDomain,
 		},
 		setupDockerDiscoveryTestCase{
 			`docker {
 	domain example.org.
 }`,
-			defaultDockerSocketPath,
+			defaultDockerEndpoint,
 			"example.org.",
 		},
 		setupDockerDiscoveryTestCase{
-			`docker /home/user/docker.sock {
+			`docker unix:///home/user/docker.sock {
 	domain home.example.org.
 }`,
-			"/home/user/docker.sock",
+			"unix:///home/user/docker.sock",
 			"home.example.org.",
 		},
 	}
@@ -45,7 +45,7 @@ func TestSetupDockerDiscovery(t *testing.T) {
 		c := caddy.NewTestController("dns", tc.configBlock)
 		dd, err := createPlugin(c)
 		assert.Nil(t, err)
-		assert.Equal(t, dd.dockerSocketPath, tc.expectedDockerSocketPath)
+		assert.Equal(t, dd.dockerEndpoint, tc.expectedDockerEndpoint)
 		assert.Equal(t, dd.dockerDomain, tc.expectedDockerDomain)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/mholt/caddy"
 )
 
-const defaultDockerSocketPath = "/var/run/docker.sock"
+const defaultDockerEndpoint = "unix:///var/run/docker.sock"
 const defaultDockerDomain = "docker.local"
 
 func init() {
@@ -19,14 +19,14 @@ func init() {
 
 func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 	dd := DockerDiscovery{
-		dockerSocketPath: defaultDockerSocketPath,
-		dockerDomain:     defaultDockerDomain,
+		dockerEndpoint: defaultDockerEndpoint,
+		dockerDomain:   defaultDockerDomain,
 	}
 
 	for c.Next() {
 		args := c.RemainingArgs()
 		if len(args) == 1 {
-			dd.dockerSocketPath = args[0]
+			dd.dockerEndpoint = args[0]
 		}
 
 		if len(args) > 1 {
