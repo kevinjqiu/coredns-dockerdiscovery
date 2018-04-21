@@ -1,5 +1,7 @@
-coredns plugin for docker discovery
+coredns-dockerdiscovery
 ===================================
+
+Docker discovery plugin for coredns
 
 Name
 ----
