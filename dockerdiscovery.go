@@ -3,12 +3,21 @@ package dockerdiscovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"net"
+	"strings"
 
 	"github.com/coredns/coredns/plugin"
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"github.com/miekg/dns"
 )
+
+type containerIPMap struct {
+	byHostName map[string]net.IP
+	byCName    map[string]string
+	byIP       map[string]string
+}
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
@@ -16,6 +25,16 @@ type DockerDiscovery struct {
 	dockerEndpoint string
 	dockerDomain   string
 	dockerClient   *dockerapi.Client
+	containerIPMap *containerIPMap
+}
+
+// NewDockerDiscovery constructs a new DockerDiscovery object
+func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscovery {
+	return DockerDiscovery{
+		dockerEndpoint: dockerEndpoint,
+		dockerDomain:   dockerDomain,
+		containerIPMap: &containerIPMap{},
+	}
 }
 
 // ServeDNS implements plugin.Handler
@@ -28,8 +47,37 @@ func (dd DockerDiscovery) Name() string {
 	return "docker"
 }
 
-func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (string, error) {
-	return "", nil
+func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (net.IP, error) {
+	log.Printf("[docker] Getting container address for %s\n", container.ID)
+	for {
+		if container.NetworkSettings.IPAddress != "" {
+			return net.ParseIP(container.NetworkSettings.IPAddress), nil
+		}
+
+		networkMode := container.HostConfig.NetworkMode
+		// TODO: Deal with containers run with host ip (--net=host)
+		// if networkMode == "host" {
+		// 	log.Println("[docker] Container uses host network")
+		// 	return nil, nil
+		// }
+
+		if strings.HasPrefix(networkMode, "container:") {
+			log.Printf("Container %s is in another container's network namspace", container.ID)
+			otherID := container.HostConfig.NetworkMode[len("container:")]
+			var err error
+			container, err = dd.dockerClient.InspectContainer(string(otherID))
+			if err != nil {
+				return nil, err
+			}
+			continue
+		} else {
+			network, ok := container.NetworkSettings.Networks[networkMode]
+			if !ok {
+				return nil, fmt.Errorf("Unable to find network settings for the network %s", networkMode)
+			}
+			return net.ParseIP(network.IPAddress), nil
+		}
+	}
 }
 
 func (dd DockerDiscovery) addContainer(containerID string) error {
@@ -38,6 +86,7 @@ func (dd DockerDiscovery) addContainer(containerID string) error {
 		return err
 	}
 	containerAddress, err := dd.getContainerAddress(container)
+	log.Printf("[docker] container %s has address %v", container.ID, containerAddress)
 	if err != nil {
 		return err
 	}
@@ -45,6 +94,7 @@ func (dd DockerDiscovery) addContainer(containerID string) error {
 }
 
 func (dd DockerDiscovery) start() error {
+	log.Println("[docker] start")
 	events := make(chan *dockerapi.APIEvents)
 
 	if err := dd.dockerClient.AddEventListener(events); err != nil {
@@ -58,7 +108,7 @@ func (dd DockerDiscovery) start() error {
 
 	for _, container := range containers {
 		if err := dd.addContainer(container.ID); err != nil {
-			log.Printf("[docker] Error adding A record for container %s: %s", container.ID, err)
+			log.Printf("[docker] Error adding A record for container %s: %s\n", container.ID, err)
 		}
 	}
 
