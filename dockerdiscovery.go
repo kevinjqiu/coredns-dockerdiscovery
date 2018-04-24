@@ -8,15 +8,18 @@ import (
 	"net"
 	"strings"
 
+	"github.com/coredns/coredns/request"
+
 	"github.com/coredns/coredns/plugin"
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"github.com/miekg/dns"
 )
 
 type containerIPMap struct {
-	byHostName map[string]net.IP
-	byCName    map[string]string
-	byIP       map[string]string
+	containerIDHostNameMap map[string][]string
+	byHostName             map[string]net.IP
+	byCName                map[string]string
+	byIP                   map[string]string
 }
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
@@ -39,6 +42,21 @@ func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscov
 
 // ServeDNS implements plugin.Handler
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	state := request.Request{W: w, Req: r, Context: ctx}
+	fmt.Println(state.Name())
+	fmt.Println(state.QName())
+	fmt.Println(state.QType())
+	switch state.QType() {
+	case dns.TypeA:
+		address, ok := dd.containerIPMap.byHostName[state.QName()]
+		if ok {
+			m := new(dns.Msg)
+			m.SetReply(r)
+			m.Answer = []dns.RR{
+				dns.A{A: address, Hdr: nil},
+			}
+		}
+	}
 	return dd.Next.ServeDNS(ctx, w, r)
 }
 

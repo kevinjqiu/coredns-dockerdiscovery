@@ -53,7 +53,7 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 		return dd, err
 	}
 	dd.dockerClient = dockerClient
-	dd.start()
+	go dd.start()
 	return dd, nil
 }
 
