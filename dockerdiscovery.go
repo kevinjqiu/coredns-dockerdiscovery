@@ -36,28 +36,42 @@ func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscov
 	return DockerDiscovery{
 		dockerEndpoint: dockerEndpoint,
 		dockerDomain:   dockerDomain,
-		containerIPMap: &containerIPMap{},
+		containerIPMap: &containerIPMap{
+			make(map[string][]string),
+			make(map[string]net.IP),
+			make(map[string]string),
+			make(map[string]string),
+		},
 	}
 }
 
 // ServeDNS implements plugin.Handler
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
-	fmt.Println(state.Name())
-	fmt.Println(state.QName())
-	fmt.Println(state.QType())
+	log.Println(dd.containerIPMap.byHostName)
+	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
 		address, ok := dd.containerIPMap.byHostName[state.QName()]
 		if ok {
-			m := new(dns.Msg)
-			m.SetReply(r)
-			m.Answer = []dns.RR{
-				dns.A{A: address, Hdr: nil},
-			}
+			log.Printf("[docker] Found ip %v for host %s", address, state.QName())
+			answers = a(state.Name(), []net.IP{address})
 		}
 	}
-	return dd.Next.ServeDNS(ctx, w, r)
+
+	if len(answers) == 0 {
+		return plugin.NextOrFailure(dd.Name(), dd.Next, ctx, w, r)
+	}
+
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Authoritative, m.RecursionAvailable, m.Compress = true, true, true
+	m.Answer = answers
+
+	state.SizeAndDo(m)
+	m, _ = state.Scrub(m)
+	w.WriteMsg(m)
+	return dns.RcodeSuccess, nil
 }
 
 // Name implements plugin.Handler
@@ -73,6 +87,7 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 		}
 
 		networkMode := container.HostConfig.NetworkMode
+
 		// TODO: Deal with containers run with host ip (--net=host)
 		// if networkMode == "host" {
 		// 	log.Println("[docker] Container uses host network")
@@ -108,6 +123,22 @@ func (dd DockerDiscovery) addContainer(containerID string) error {
 	if err != nil {
 		return err
 	}
+	hostName := fmt.Sprintf("%s.%s", container.Config.Hostname, dd.dockerDomain)
+	dd.containerIPMap.containerIDHostNameMap[containerID] = []string{hostName} // TODO: deal with multiple hostnames
+	dd.containerIPMap.byHostName[hostName] = containerAddress
+	return nil
+}
+
+func (dd DockerDiscovery) stopContainer(containerID string) error {
+	hostnames, ok := dd.containerIPMap.containerIDHostNameMap[containerID]
+	if !ok {
+		log.Printf("[docker] No hostname associated with the container %s", containerID)
+		return nil
+	}
+	for _, hostname := range hostnames {
+		log.Printf("[docker] Deleting hostname entry %s", hostname)
+		delete(dd.containerIPMap.byHostName, hostname)
+	}
 	return nil
 }
 
@@ -134,14 +165,31 @@ func (dd DockerDiscovery) start() error {
 		go func(msg *dockerapi.APIEvents) {
 			switch msg.Status {
 			case "start":
+				log.Println("[docker] New container spawned. Attempt to add A record for it")
 				if err := dd.addContainer(msg.ID); err != nil {
 					log.Printf("[docker] Error adding A record for container %s: %s", msg.ID, err)
 				}
 			case "die":
-				log.Printf("[docker] Removing A record for container %s", msg.ID)
+				log.Println("[docker] Container being stopped. Attempt to remove its A record from the DNS", msg.ID)
+				if err := dd.stopContainer(msg.ID); err != nil {
+					log.Printf("[docker] Error deleting A record for container: %s: %s", msg.ID, err)
+				}
 			}
 		}(msg)
 	}
 
 	return errors.New("docker event loop closed")
+}
+
+// a takes a slice of net.IPs and returns a slice of A RRs.
+func a(zone string, ips []net.IP) []dns.RR {
+	answers := []dns.RR{}
+	for _, ip := range ips {
+		r := new(dns.A)
+		r.Hdr = dns.RR_Header{Name: zone, Rrtype: dns.TypeA,
+			Class: dns.ClassINET, Ttl: 3600}
+		r.A = ip
+		answers = append(answers, r)
+	}
+	return answers
 }
