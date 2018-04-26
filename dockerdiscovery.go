@@ -18,8 +18,6 @@ import (
 type containerIPMap struct {
 	containerIDHostNameMap map[string][]string
 	byHostName             map[string]net.IP
-	byCName                map[string]string
-	byIP                   map[string]string
 }
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
@@ -39,8 +37,6 @@ func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscov
 		containerIPMap: &containerIPMap{
 			make(map[string][]string),
 			make(map[string]net.IP),
-			make(map[string]string),
-			make(map[string]string),
 		},
 	}
 }
