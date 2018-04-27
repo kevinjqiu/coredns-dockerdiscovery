@@ -44,7 +44,6 @@ func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscov
 // ServeDNS implements plugin.Handler
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
-	log.Println(dd.containerIPMap.byHostName)
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
@@ -182,8 +181,12 @@ func a(zone string, ips []net.IP) []dns.RR {
 	answers := []dns.RR{}
 	for _, ip := range ips {
 		r := new(dns.A)
-		r.Hdr = dns.RR_Header{Name: zone, Rrtype: dns.TypeA,
-			Class: dns.ClassINET, Ttl: 3600}
+		r.Hdr = dns.RR_Header{
+			Name:   zone,
+			Rrtype: dns.TypeA,
+			Class:  dns.ClassINET,
+			Ttl:    3600,
+		}
 		r.A = ip
 		answers = append(answers, r)
 	}
