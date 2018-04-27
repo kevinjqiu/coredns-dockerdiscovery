@@ -19,6 +19,16 @@ Syntax
 * `DOCKER_ENDPOINT`: the path to the docker socket. If unspecified, defaults to `unix:///var/run/docker.sock`. It can also be TCP socket, such as `tcp://127.0.0.1:999`.
 * `DOMAIN_NAME`: the name of the domain you want your containers to be part of. e.g., when `DOMAIN_NAME` is `docker.local`, your `mysql-0` container will be assigned the domain name: `mysql-0.docker.local`.
 
+How To Build
+------------
+
+1. Checkout coredns:  `go get github.com/coredns/coredns`.
+2. `cd $GOPATH/src/github.com/coredns/coredns`
+3. `echo "docker:github.com/kevinjqiu/coredns-dockerdiscovery" >> plugin.cfg`
+4. `go generate`
+5. `make`
+
+
 Example
 -------
 
