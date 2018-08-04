@@ -108,3 +108,8 @@ Stop the docker container will remove the DNS entry for `alpha.docker.local`:
     ;; SERVER: 127.0.0.1#15353(127.0.0.1)
     ;; WHEN: Thu Apr 26 22:41:38 EDT 2018
     ;; MSG SIZE  rcvd: 47
+
+Alternatively, run insider docker container
+
+    docker build -t coredns-dockerdiscovery .
+    docker run --rm -v ${PWD}/../Corefile:/coredns-dockerdiscovery/Corefile -v /var/run/docker.sock:/var/run/docker.sock -p 15353:15353/udp coredns-dockerdiscovery -conf /coredns-dockerdiscovery/Corefile
