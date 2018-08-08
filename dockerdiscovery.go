@@ -1,7 +1,7 @@
 package dockerdiscovery
 
 import (
-								"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin"
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"fmt"
 	"net"
@@ -19,48 +19,80 @@ type ContainerMap map[string]*dockerapi.Container
 type DockerDiscovery struct {
 	Next           plugin.Handler
 	dockerEndpoint string
-	dockerDomain   *string
+	resolvers 	   []ContainerDomainResolver
 	dockerClient   *dockerapi.Client
 	containerMap   ContainerMap
 }
 
-/*var ContainerDomainResolver interface {
-	resolveDomainsByContainer(container *dockerapi.Container) ([]string, error)
-}*/
+type ContainerDomainResolver interface {
+	// return domains
+	resolve(container *dockerapi.Container) ([]string, error)
+}
+type SubDomainHostResolver struct {
+	domain string
+}
+
+func (resolver SubDomainHostResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+	domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, resolver.domain))
+	return domains, nil
+}
+
+type NetworkAliasesResolver struct {
+	network string
+}
+
+func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+
+	log.Printf("Resolve for %s network", resolver.network)
+
+	if resolver.network != "" {
+		network, ok := container.NetworkSettings.Networks[resolver.network]
+		if ok {
+			domains = append(domains, network.Aliases...)
+		}
+	} else {
+		for _, network := range container.NetworkSettings.Networks {
+			domains = append(domains, network.Aliases...)
+		}
+	}
+
+	for i, d := range domains {
+		domains[i] = fmt.Sprintf("%s.", d)
+	}
+
+	return domains, nil
+}
 
 // NewDockerDiscovery constructs a new DockerDiscovery object
-func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscovery {
+func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
 	return DockerDiscovery{
 		dockerEndpoint: dockerEndpoint,
-		dockerDomain:   &dockerDomain,
 		containerMap:   make(ContainerMap),
 	}
 }
 
 func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
 	var domains []string
-
-	// TODO move to handler
-	if (dd.dockerDomain != nil) {
-		domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, dd.dockerDomain))
+	for _, resolver := range dd.resolvers {
+		var d, _ = resolver.resolve(container)
+		domains = append(domains, d...)
 	}
-	// TODO move to handler
-	if (len(container.NetworkSettings.Networks["s"].Aliases) > 0) {
-		for _, alias := range container.NetworkSettings.Networks["s"].Aliases {
-			domains = append(domains, alias)
-		}
-	}
+	/*for _, d := range domains {
+		log.Printf("Domain %s", d)
+	}*/
 
 	return domains, nil
 }
 
-func (dd DockerDiscovery) resolveIPbyDomain(domain string) (net.IP, error) {
+func (dd DockerDiscovery) containerIPbyDomain(domain string) (*dockerapi.Container, error) {
 	for _, container := range dd.containerMap {
 		// call resolveDomains after add container
 		var domains, _ = dd.resolveDomainsByContainer(container)
 		for _, d := range domains {
-			if (d == domain) {
-				return net.ParseIP(container.NetworkSettings.IPAddress), nil
+			if d == domain {
+				return container, nil
 			}
 		}
 	}
@@ -74,10 +106,13 @@ func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r 
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
-		address, _ := dd.resolveIPbyDomain(state.QName())
-		if address != nil {
-			log.Printf("[docker] Found ip %v for host %s", address, state.QName())
-			answers = a(state.Name(), []net.IP{address})
+		container, _ := dd.containerIPbyDomain(state.QName())
+		if container != nil {
+			var address, error = dd.getContainerAddress(container)
+			if error == nil {
+				log.Printf("[docker] Found ip %v for host %s", address, state.QName())
+				answers = a(state.Name(), []net.IP{address})
+			}
 		}
 	}
 
@@ -156,7 +191,7 @@ func (dd DockerDiscovery) stopContainer(containerID string) error {
 		return nil
 	}
 	log.Printf("[docker] Deleting hostname entry %s", container.ID) // TODO container.hostname
-	delete(dd.containerMap, container)
+	delete(dd.containerMap, containerID)
 
 	return nil
 }

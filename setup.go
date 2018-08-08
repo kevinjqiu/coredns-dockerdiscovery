@@ -21,7 +21,7 @@ func init() {
 
 // TODO(kevinjqiu): add docker endpoint verification
 func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
-	dd := NewDockerDiscovery(defaultDockerEndpoint, defaultDockerDomain)
+	dd := NewDockerDiscovery(defaultDockerEndpoint)
 
 	for c.Next() {
 		args := c.RemainingArgs()
@@ -37,10 +37,23 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 			var value = c.Val()
 			switch value {
 			case "domain":
+				var resolver = &SubDomainHostResolver{
+					domain: defaultDockerDomain,
+				}
+				dd.resolvers = append(dd.resolvers, resolver)
 				if !c.NextArg() {
 					return dd, c.ArgErr()
 				}
-				dd.dockerDomain = &value
+				resolver.domain = c.Val()
+			case "networkAliases":
+				var resolver = &NetworkAliasesResolver{
+					network: "",
+				}
+				dd.resolvers = append(dd.resolvers, resolver)
+				if !c.NextArg() {
+					return dd, c.ArgErr()
+				}
+				resolver.network = c.Val()
 			default:
 				return dd, c.Errf("unknown property: '%s'", c.Val())
 			}
