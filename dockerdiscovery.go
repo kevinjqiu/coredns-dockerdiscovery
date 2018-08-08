@@ -1,18 +1,16 @@
 package dockerdiscovery
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log"
-	"net"
-	"strings"
-
-	"github.com/coredns/coredns/request"
-
-	"github.com/coredns/coredns/plugin"
+								"github.com/coredns/coredns/plugin"
 	dockerapi "github.com/fsouza/go-dockerclient"
+	"fmt"
+	"net"
+	"context"
 	"github.com/miekg/dns"
+	"github.com/coredns/coredns/request"
+	"log"
+	"strings"
+	"errors"
 )
 
 type ContainerMap map[string]*dockerapi.Container
@@ -26,31 +24,48 @@ type DockerDiscovery struct {
 	containerMap   ContainerMap
 }
 
+/*var ContainerDomainResolver interface {
+	resolveDomainsByContainer(container *dockerapi.Container) ([]string, error)
+}*/
+
 // NewDockerDiscovery constructs a new DockerDiscovery object
-func NewDockerDiscovery(dockerEndpoint string, dockerDomain *string) DockerDiscovery {
+func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscovery {
 	return DockerDiscovery{
 		dockerEndpoint: dockerEndpoint,
-		dockerDomain:   dockerDomain,
+		dockerDomain:   &dockerDomain,
 		containerMap:   make(ContainerMap),
 	}
 }
 
 func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
 	var domains []string
+
+	// TODO move to handler
 	if (dd.dockerDomain != nil) {
 		domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, dd.dockerDomain))
 	}
+	// TODO move to handler
+	if (len(container.NetworkSettings.Networks["s"].Aliases) > 0) {
+		for _, alias := range container.NetworkSettings.Networks["s"].Aliases {
+			domains = append(domains, alias)
+		}
+	}
 
-	return domains, nill
+	return domains, nil
 }
 
 func (dd DockerDiscovery) resolveIPbyDomain(domain string) (net.IP, error) {
 	for _, container := range dd.containerMap {
-		hostName := fmt.Sprintf("%s.%s", container.Config.Hostname, dd.dockerDomain)
-		fmt.Printf("key[%s] value[%s]\n", hostName)
+		// call resolveDomains after add container
+		var domains, _ = dd.resolveDomainsByContainer(container)
+		for _, d := range domains {
+			if (d == domain) {
+				return net.ParseIP(container.NetworkSettings.IPAddress), nil
+			}
+		}
 	}
 
-	return dd.containerMap.byHostName[domain], nill
+	return nil, nil
 }
 
 // ServeDNS implements plugin.Handler
@@ -59,8 +74,8 @@ func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r 
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
-		address, ok := dd.resolveIPbyDomain(state.QName())
-		if ok {
+		address, _ := dd.resolveIPbyDomain(state.QName())
+		if address != nil {
 			log.Printf("[docker] Found ip %v for host %s", address, state.QName())
 			answers = a(state.Name(), []net.IP{address})
 		}
