@@ -21,7 +21,7 @@ func init() {
 
 // TODO(kevinjqiu): add docker endpoint verification
 func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
-	dd := NewDockerDiscovery(defaultDockerEndpoint, defaultDockerDomain)
+	dd := NewDockerDiscovery(defaultDockerEndpoint, &defaultDockerDomain)
 
 	for c.Next() {
 		args := c.RemainingArgs()
