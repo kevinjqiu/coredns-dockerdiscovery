@@ -44,6 +44,33 @@ Example
         log
     }
 
+    myProject.loc:15353 {
+        docker unix:///var/run/docker.sock {
+            networkAliases myProjectNetwork
+        }
+        log
+    }
+    
+Create myProject network
+ 
+    docker create network myProjectNetwork
+    
+`docker-compose.yml`:
+
+    version: "3.1"
+
+    services:
+      postgresql:
+        image: ...
+        networks:
+          default:
+            aliases:
+              - postgres.myProject.loc
+    networks:
+      default:
+        external:
+          name: myProjectNetwork
+
 Start CoreDNS:
 
     $ ./coredns
@@ -82,7 +109,8 @@ Use CoreDNS as your resolver to resovle the `alpha.docker.local`:
     ;; SERVER: 127.0.0.1#15353(127.0.0.1)
     ;; WHEN: Thu Apr 26 22:39:55 EDT 2018
     ;; MSG SIZE  rcvd: 63
-
+       
+    $ dig @localhost -p 15353 postgres.myProject.loc
 Stop the docker container will remove the DNS entry for `alpha.docker.local`:
 
     $ docker stop 78c2a
