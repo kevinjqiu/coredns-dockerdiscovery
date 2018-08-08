@@ -13,39 +13,37 @@ import (
 	"errors"
 )
 
-type ContainerMap map[string]*dockerapi.Container
-
-// DockerDiscovery is a plugin that conforms to the coredns plugin interface
-type DockerDiscovery struct {
-	Next           plugin.Handler
-	dockerEndpoint string
-	resolvers 	   []ContainerDomainResolver
-	dockerClient   *dockerapi.Client
-	containerMap   ContainerMap
+type ContainerInfo struct {
+	container *dockerapi.Container
+	address   net.IP
+	domains   []string // resolved domain
 }
+
+type ContainerInfoMap map[string]*ContainerInfo
 
 type ContainerDomainResolver interface {
 	// return domains
 	resolve(container *dockerapi.Container) ([]string, error)
 }
+
+
+
 type SubDomainHostResolver struct {
 	domain string
 }
-
 func (resolver SubDomainHostResolver) resolve(container *dockerapi.Container) ([]string, error) {
 	var domains []string
 	domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, resolver.domain))
 	return domains, nil
 }
 
+
+
 type NetworkAliasesResolver struct {
 	network string
 }
-
 func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) ([]string, error) {
 	var domains []string
-
-	log.Printf("Resolve for %s network", resolver.network)
 
 	if resolver.network != "" {
 		network, ok := container.NetworkSettings.Networks[resolver.network]
@@ -65,11 +63,21 @@ func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) (
 	return domains, nil
 }
 
+
+// DockerDiscovery is a plugin that conforms to the coredns plugin interface
+type DockerDiscovery struct {
+	Next           plugin.Handler
+	dockerEndpoint string
+	resolvers 	   []ContainerDomainResolver
+	dockerClient   *dockerapi.Client
+	containerInfoMap   ContainerInfoMap
+	domainIPMap 	map[string]*net.IP
+}
 // NewDockerDiscovery constructs a new DockerDiscovery object
 func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
 	return DockerDiscovery{
 		dockerEndpoint: dockerEndpoint,
-		containerMap:   make(ContainerMap),
+		containerInfoMap:   make(ContainerInfoMap),
 	}
 }
 
@@ -86,13 +94,11 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 	return domains, nil
 }
 
-func (dd DockerDiscovery) containerIPbyDomain(domain string) (*dockerapi.Container, error) {
-	for _, container := range dd.containerMap {
-		// call resolveDomains after add container
-		var domains, _ = dd.resolveDomainsByContainer(container)
-		for _, d := range domains {
+func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, error) {
+	for _, containerInfo := range dd.containerInfoMap {
+		for _, d := range containerInfo.domains {
 			if d == domain {
-				return container, nil
+				return containerInfo, nil
 			}
 		}
 	}
@@ -106,13 +112,10 @@ func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r 
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
-		container, _ := dd.containerIPbyDomain(state.QName())
-		if container != nil {
-			var address, error = dd.getContainerAddress(container)
-			if error == nil {
-				log.Printf("[docker] Found ip %v for host %s", address, state.QName())
-				answers = a(state.Name(), []net.IP{address})
-			}
+		containerInfo, _ := dd.containerInfoByDomain(state.QName())
+		if containerInfo != nil {
+			log.Printf("[docker] Found ip %v for host %s", containerInfo.address, state.QName())
+			answers = a(state.Name(), []net.IP{containerInfo.address})
 		}
 	}
 
@@ -175,23 +178,29 @@ func (dd DockerDiscovery) addContainer(containerID string) error {
 	if err != nil {
 		return err
 	}
+
 	containerAddress, err := dd.getContainerAddress(container)
 	log.Printf("[docker] container %s has address %v", container.ID, containerAddress)
 	if err != nil {
 		return err
 	}
-	dd.containerMap[containerID] = container
+	domains, _ := dd.resolveDomainsByContainer(container)
+	dd.containerInfoMap[containerID] = &ContainerInfo{
+		container: container,
+		address: containerAddress,
+		domains: domains,
+	}
 	return nil
 }
 
 func (dd DockerDiscovery) stopContainer(containerID string) error {
-	container, ok := dd.containerMap[containerID]
+	containerInfo, ok := dd.containerInfoMap[containerID]
 	if !ok {
 		log.Printf("[docker] No hostname associated with the container %s", containerID)
 		return nil
 	}
-	log.Printf("[docker] Deleting hostname entry %s", container.ID) // TODO container.hostname
-	delete(dd.containerMap, containerID)
+	log.Printf("[docker] Deleting hostname entry %s", containerInfo.container.ID) // TODO container.hostname
+	delete(dd.containerInfoMap, containerID)
 
 	return nil
 }
