@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	dockerapi "github.com/fsouza/go-dockerclient"
 
-	"log"
-)
+	)
 
 type setupDockerDiscoveryTestCase struct {
 	configBlock            string
@@ -86,7 +85,6 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	assert.NotNil(t, containerInfo)
 	assert.NotNil(t, containerInfo.address)
 
-	log.Printf("%s", containerInfo.address.Equal(address))
 	assert.Equal(t, containerInfo.address, address)
 
 	containerInfo, e = dd.containerInfoByDomain("wrong.loc.")
