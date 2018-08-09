@@ -2,9 +2,13 @@ package dockerdiscovery
 
 import (
 	"testing"
+	"net"
 
 	"github.com/mholt/caddy"
 	"github.com/stretchr/testify/assert"
+	dockerapi "github.com/fsouza/go-dockerclient"
+
+	"log"
 )
 
 type setupDockerDiscoveryTestCase struct {
@@ -46,6 +50,35 @@ func TestSetupDockerDiscovery(t *testing.T) {
 		dd, err := createPlugin(c)
 		assert.Nil(t, err)
 		assert.Equal(t, dd.dockerEndpoint, tc.expectedDockerEndpoint)
-		assert.Equal(t, dd.dockerDomain, tc.expectedDockerDomain)
 	}
+
+	c := caddy.NewTestController("dns", `docker unix:///home/user/docker.sock {
+	domain home.example.org.
+	network_aliases my_project_network_name
+}`)
+	dd, err := createPlugin(c)
+	assert.Nil(t, err)
+
+	var container = &dockerapi.Container{
+		ID: "container-1",
+	}
+	var address = net.ParseIP("192.11.0.1")
+	var domains = []string{"myproject.loc."}
+
+	dd.containerInfoMap["1"] = &ContainerInfo{
+		container: container,
+		address: address,
+		domains: domains,
+	}
+
+	var containerInfo, e = dd.containerInfoByDomain("myproject.loc.")
+	assert.Nil(t, e)
+	assert.NotNil(t, containerInfo)
+	assert.NotNil(t, containerInfo.address)
+
+	log.Printf("%s", containerInfo.address.Equal(address))
+	assert.Equal(t, containerInfo.address, address)
+
+	containerInfo, e = dd.containerInfoByDomain("wrong.loc.")
+	assert.Nil(t, containerInfo)
 }
