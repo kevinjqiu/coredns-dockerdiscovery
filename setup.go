@@ -45,7 +45,7 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 					return dd, c.ArgErr()
 				}
 				resolver.domain = c.Val()
-			case "networkAliases":
+			case "network_aliases":
 				var resolver = &NetworkAliasesResolver{
 					network: "",
 				}

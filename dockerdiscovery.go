@@ -84,12 +84,12 @@ func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
 func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
 	var domains []string
 	for _, resolver := range dd.resolvers {
-		var d, _ = resolver.resolve(container)
+		var d, err = resolver.resolve(container)
+		if err != nil {
+			log.Printf("[docker] Error resolving container domains %s", err)
+		}
 		domains = append(domains, d...)
 	}
-	/*for _, d := range domains {
-		log.Printf("Domain %s", d)
-	}*/
 
 	return domains, nil
 }

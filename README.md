@@ -13,7 +13,7 @@ Syntax
 
     docker [DOCKER_ENDPOINT] {
         domain DOMAIN_NAME
-        networkAliases DOCKER_NETWORK
+        network_aliases DOCKER_NETWORK
     }
 
 
@@ -48,7 +48,7 @@ Example
 
     myProject.loc:15353 {
         docker unix:///var/run/docker.sock {
-            networkAliases myProjectNetwork
+            network_aliases myProjectNetwork
         }
         log
     }
