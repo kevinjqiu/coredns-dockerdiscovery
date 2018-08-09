@@ -59,19 +59,29 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	dd, err := createPlugin(c)
 	assert.Nil(t, err)
 
-	var container = &dockerapi.Container{
-		ID: "container-1",
+	networks := make(map[string]dockerapi.ContainerNetwork)
+	var aliases = []string{"myproject.loc"}
+
+	networks["my_project_network_name"] = dockerapi.ContainerNetwork{
+		Aliases: aliases,
 	}
 	var address = net.ParseIP("192.11.0.1")
-	var domains = []string{"myproject.loc."}
-
-	dd.containerInfoMap["1"] = &ContainerInfo{
-		container: container,
-		address: address,
-		domains: domains,
+	var container = &dockerapi.Container{
+		ID: "container-1",
+		Config: &dockerapi.Config{
+			Hostname: "nginx",
+		},
+		NetworkSettings: &dockerapi.NetworkSettings{
+			Networks: networks,
+			IPAddress: address.String(),
+		},
 	}
 
-	var containerInfo, e = dd.containerInfoByDomain("myproject.loc.")
+
+	e := dd.addContainer(container)
+	assert.Nil(t, e)
+
+	containerInfo, e := dd.containerInfoByDomain("myproject.loc.")
 	assert.Nil(t, e)
 	assert.NotNil(t, containerInfo)
 	assert.NotNil(t, containerInfo.address)
@@ -80,5 +90,11 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	assert.Equal(t, containerInfo.address, address)
 
 	containerInfo, e = dd.containerInfoByDomain("wrong.loc.")
+	assert.Nil(t, containerInfo)
+
+	containerInfo, e = dd.containerInfoByDomain("nginx.home.example.org.")
+	assert.NotNil(t, containerInfo)
+
+	containerInfo, e = dd.containerInfoByDomain("wrong.home.example.org.")
 	assert.Nil(t, containerInfo)
 }

@@ -173,19 +173,14 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 	}
 }
 
-func (dd DockerDiscovery) addContainer(containerID string) error {
-	container, err := dd.dockerClient.InspectContainer(containerID)
-	if err != nil {
-		return err
-	}
-
+func (dd DockerDiscovery) addContainer(container *dockerapi.Container) error {
 	containerAddress, err := dd.getContainerAddress(container)
 	log.Printf("[docker] container %s has address %v", container.ID, containerAddress)
 	if err != nil {
 		return err
 	}
 	domains, _ := dd.resolveDomainsByContainer(container)
-	dd.containerInfoMap[containerID] = &ContainerInfo{
+	dd.containerInfoMap[container.ID] = &ContainerInfo{
 		container: container,
 		address: containerAddress,
 		domains: domains,
@@ -218,8 +213,12 @@ func (dd DockerDiscovery) start() error {
 		return err
 	}
 
-	for _, container := range containers {
-		if err := dd.addContainer(container.ID); err != nil {
+	for _, apiContainer := range containers {
+		container, err := dd.dockerClient.InspectContainer(apiContainer.ID)
+		if err != nil {
+			// TODO err
+		}
+		if err := dd.addContainer(container); err != nil {
 			log.Printf("[docker] Error adding A record for container %s: %s\n", container.ID, err)
 		}
 	}
@@ -229,7 +228,12 @@ func (dd DockerDiscovery) start() error {
 			switch msg.Status {
 			case "start":
 				log.Println("[docker] New container spawned. Attempt to add A record for it")
-				if err := dd.addContainer(msg.ID); err != nil {
+
+				container, err := dd.dockerClient.InspectContainer(msg.ID)
+				if err != nil {
+					//TODO err
+				}
+				if err := dd.addContainer(container); err != nil {
 					log.Printf("[docker] Error adding A record for container %s: %s", msg.ID, err)
 				}
 			case "die":
