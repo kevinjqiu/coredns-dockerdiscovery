@@ -1,44 +1,109 @@
 package dockerdiscovery
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log"
-	"net"
-	"strings"
-
-	"github.com/coredns/coredns/request"
-
 	"github.com/coredns/coredns/plugin"
 	dockerapi "github.com/fsouza/go-dockerclient"
+	"fmt"
+	"net"
+	"context"
 	"github.com/miekg/dns"
+	"github.com/coredns/coredns/request"
+	"log"
+	"strings"
+	"errors"
 )
 
-type containerIPMap struct {
-	containerIDHostNameMap map[string][]string
-	byHostName             map[string]net.IP
+type ContainerInfo struct {
+	container *dockerapi.Container
+	address   net.IP
+	domains   []string // resolved domain
 }
+
+type ContainerInfoMap map[string]*ContainerInfo
+
+type ContainerDomainResolver interface {
+	// return domains
+	resolve(container *dockerapi.Container) ([]string, error)
+}
+
+
+
+type SubDomainHostResolver struct {
+	domain string
+}
+func (resolver SubDomainHostResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+	domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, resolver.domain))
+	return domains, nil
+}
+
+
+
+type NetworkAliasesResolver struct {
+	network string
+}
+func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+
+	if resolver.network != "" {
+		network, ok := container.NetworkSettings.Networks[resolver.network]
+		if ok {
+			domains = append(domains, network.Aliases...)
+		}
+	} else {
+		for _, network := range container.NetworkSettings.Networks {
+			domains = append(domains, network.Aliases...)
+		}
+	}
+
+	for i, d := range domains {
+		domains[i] = fmt.Sprintf("%s.", d)
+	}
+
+	return domains, nil
+}
+
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
 	Next           plugin.Handler
 	dockerEndpoint string
-	dockerDomain   string
+	resolvers 	   []ContainerDomainResolver
 	dockerClient   *dockerapi.Client
-	containerIPMap *containerIPMap
+	containerInfoMap   ContainerInfoMap
+	domainIPMap 	map[string]*net.IP
 }
-
 // NewDockerDiscovery constructs a new DockerDiscovery object
-func NewDockerDiscovery(dockerEndpoint string, dockerDomain string) DockerDiscovery {
+func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
 	return DockerDiscovery{
 		dockerEndpoint: dockerEndpoint,
-		dockerDomain:   dockerDomain,
-		containerIPMap: &containerIPMap{
-			make(map[string][]string),
-			make(map[string]net.IP),
-		},
+		containerInfoMap:   make(ContainerInfoMap),
 	}
+}
+
+func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+	for _, resolver := range dd.resolvers {
+		var d, err = resolver.resolve(container)
+		if err != nil {
+			log.Printf("[docker] Error resolving container domains %s", err)
+		}
+		domains = append(domains, d...)
+	}
+
+	return domains, nil
+}
+
+func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, error) {
+	for _, containerInfo := range dd.containerInfoMap {
+		for _, d := range containerInfo.domains {
+			if d == domain {
+				return containerInfo, nil
+			}
+		}
+	}
+
+	return nil, nil
 }
 
 // ServeDNS implements plugin.Handler
@@ -47,10 +112,10 @@ func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r 
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
-		address, ok := dd.containerIPMap.byHostName[state.QName()]
-		if ok {
-			log.Printf("[docker] Found ip %v for host %s", address, state.QName())
-			answers = a(state.Name(), []net.IP{address})
+		containerInfo, _ := dd.containerInfoByDomain(state.QName())
+		if containerInfo != nil {
+			log.Printf("[docker] Found ip %v for host %s", containerInfo.address, state.QName())
+			answers = a(state.Name(), []net.IP{containerInfo.address})
 		}
 	}
 
@@ -108,32 +173,30 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 	}
 }
 
-func (dd DockerDiscovery) addContainer(containerID string) error {
-	container, err := dd.dockerClient.InspectContainer(containerID)
-	if err != nil {
-		return err
-	}
+func (dd DockerDiscovery) addContainer(container *dockerapi.Container) error {
 	containerAddress, err := dd.getContainerAddress(container)
 	log.Printf("[docker] container %s has address %v", container.ID, containerAddress)
 	if err != nil {
 		return err
 	}
-	hostName := fmt.Sprintf("%s.%s", container.Config.Hostname, dd.dockerDomain)
-	dd.containerIPMap.containerIDHostNameMap[containerID] = []string{hostName} // TODO: deal with multiple hostnames
-	dd.containerIPMap.byHostName[hostName] = containerAddress
+	domains, _ := dd.resolveDomainsByContainer(container)
+	dd.containerInfoMap[container.ID] = &ContainerInfo{
+		container: container,
+		address: containerAddress,
+		domains: domains,
+	}
 	return nil
 }
 
 func (dd DockerDiscovery) stopContainer(containerID string) error {
-	hostnames, ok := dd.containerIPMap.containerIDHostNameMap[containerID]
+	containerInfo, ok := dd.containerInfoMap[containerID]
 	if !ok {
 		log.Printf("[docker] No hostname associated with the container %s", containerID)
 		return nil
 	}
-	for _, hostname := range hostnames {
-		log.Printf("[docker] Deleting hostname entry %s", hostname)
-		delete(dd.containerIPMap.byHostName, hostname)
-	}
+	log.Printf("[docker] Deleting hostname entry %s", containerInfo.container.ID) // TODO container.hostname
+	delete(dd.containerInfoMap, containerID)
+
 	return nil
 }
 
@@ -150,8 +213,12 @@ func (dd DockerDiscovery) start() error {
 		return err
 	}
 
-	for _, container := range containers {
-		if err := dd.addContainer(container.ID); err != nil {
+	for _, apiContainer := range containers {
+		container, err := dd.dockerClient.InspectContainer(apiContainer.ID)
+		if err != nil {
+			// TODO err
+		}
+		if err := dd.addContainer(container); err != nil {
 			log.Printf("[docker] Error adding A record for container %s: %s\n", container.ID, err)
 		}
 	}
@@ -161,7 +228,12 @@ func (dd DockerDiscovery) start() error {
 			switch msg.Status {
 			case "start":
 				log.Println("[docker] New container spawned. Attempt to add A record for it")
-				if err := dd.addContainer(msg.ID); err != nil {
+
+				container, err := dd.dockerClient.InspectContainer(msg.ID)
+				if err != nil {
+					//TODO err
+				}
+				if err := dd.addContainer(container); err != nil {
 					log.Printf("[docker] Error adding A record for container %s: %s", msg.ID, err)
 				}
 			case "die":

@@ -13,11 +13,13 @@ Syntax
 
     docker [DOCKER_ENDPOINT] {
         domain DOMAIN_NAME
+        network_aliases DOCKER_NETWORK
     }
 
 
 * `DOCKER_ENDPOINT`: the path to the docker socket. If unspecified, defaults to `unix:///var/run/docker.sock`. It can also be TCP socket, such as `tcp://127.0.0.1:999`.
 * `DOMAIN_NAME`: the name of the domain you want your containers to be part of. e.g., when `DOMAIN_NAME` is `docker.local`, your `mysql-0` container will be assigned the domain name: `mysql-0.docker.local`.
+* `DOCKER_NETWORK`: the name of the docker network
 
 How To Build
 ------------
@@ -43,6 +45,33 @@ Example
         }
         log
     }
+
+    myProject.loc:15353 {
+        docker unix:///var/run/docker.sock {
+            network_aliases myProjectNetwork
+        }
+        log
+    }
+    
+Create myProject network
+ 
+    docker create network myProjectNetwork
+    
+`docker-compose.yml`:
+
+    version: "3.1"
+
+    services:
+      postgresql:
+        image: ...
+        networks:
+          default:
+            aliases:
+              - postgres.myProject.loc
+    networks:
+      default:
+        external:
+          name: myProjectNetwork
 
 Start CoreDNS:
 
@@ -109,6 +138,10 @@ Stop the docker container will remove the DNS entry for `alpha.docker.local`:
     ;; WHEN: Thu Apr 26 22:41:38 EDT 2018
     ;; MSG SIZE  rcvd: 47
 
+Can resolve container by aliases
+           
+    $ dig @localhost -p 15353 postgres.myProject.loc
+    
 Alternatively, run insider docker container
 
     docker build -t coredns-dockerdiscovery .
