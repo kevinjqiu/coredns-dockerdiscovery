@@ -1,4 +1,5 @@
 test:
+	go get -u github.com/stretchr/testify/assert
 	go test -v
 
 clean:
