@@ -5,7 +5,8 @@ clean:
 	rm -f coredns
 
 coredns:
-	go get github.com/coredns/coredns
+	go get -u github.com/fsouza/go-dockerclient
+	go get -u github.com/coredns/coredns
 	cd $(GOPATH)/src/github.com/coredns/coredns \
 		&& echo "docker:github.com/kevinjqiu/coredns-dockerdiscovery" >> plugin.cfg \
 		&& cat plugin.cfg | uniq > plugin.cfg.tmp \
