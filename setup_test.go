@@ -66,7 +66,8 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 	var address = net.ParseIP("192.11.0.1")
 	var container = &dockerapi.Container{
-		ID: "container-1",
+		ID: "fa155d6fd141e29256c286070d2d44b3f45f1e46822578f1e7d66c1e7981e6c7",
+		Name: "evil_ptolemy",
 		Config: &dockerapi.Config{
 			Hostname: "nginx",
 		},
@@ -77,7 +78,7 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 
 
-	e := dd.addContainer(container)
+	e := dd.updateContainerInfo(container)
 	assert.Nil(t, e)
 
 	containerInfo, e := dd.containerInfoByDomain("myproject.loc.")

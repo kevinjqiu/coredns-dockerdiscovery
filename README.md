@@ -46,18 +46,19 @@ Example
         log
     }
 
-    myProject.loc:15353 {
+    my-project.loc:15353 {
         docker unix:///var/run/docker.sock {
-            network_aliases myProjectNetwork
+            network_aliases my_project_network
         }
         log
     }
     
-Create myProject network
+Create my_project_network and container
  
-    docker create network myProjectNetwork
-    
-`docker-compose.yml`:
+    docker create network my_project_network
+    docker run --network my_project_network --alias postgres.my-project.loc postgres
+
+Example for `docker-compose.yml`:
 
     version: "3.1"
 
@@ -67,11 +68,11 @@ Create myProject network
         networks:
           default:
             aliases:
-              - postgres.myProject.loc
+              - postgres.my-project.loc
     networks:
       default:
         external:
-          name: myProjectNetwork
+          name: my_project_network
 
 Start CoreDNS:
 
@@ -140,7 +141,7 @@ Stop the docker container will remove the DNS entry for `alpha.docker.local`:
 
 Can resolve container by aliases
            
-    $ dig @localhost -p 15353 postgres.myProject.loc
+    $ dig @localhost -p 15353 postgres.my-project.loc
     
 Alternatively, run insider docker container
 
