@@ -247,16 +247,16 @@ func (dd DockerDiscovery) start() error {
 
 				container, err := dd.dockerClient.InspectContainer(msg.Actor.ID)
 				if err != nil {
-					log.Printf("[docker] Event error %s #%s: %s", event, msg.Actor.ID, err)
+					log.Printf("[docker] Event error %s #%s: %s", event, msg.Actor.ID[:12], err)
 					return
 				}
 				if err := dd.updateContainerInfo(container); err != nil {
 					log.Printf("[docker] Error adding A record for container %s: %s", container.ID[:12], err)
 				}
 			case "container:die":
-				log.Println("[docker] Container being stopped. Attempt to remove its A record from the DNS", msg.Actor.ID)
+				log.Println("[docker] Container being stopped. Attempt to remove its A record from the DNS", msg.Actor.ID[:12])
 				if err := dd.removeContainerInfo(msg.Actor.ID); err != nil {
-					log.Printf("[docker] Error deleting A record for container: %s: %s", msg.Actor.ID, err)
+					log.Printf("[docker] Error deleting A record for container: %s: %s", msg.Actor.ID[:12], err)
 				}
 			case "network:connect":
 				// take a look https://gist.github.com/josefkarasek/be9bac36921f7bc9a61df23451594fbf for example of same event's types attributes
