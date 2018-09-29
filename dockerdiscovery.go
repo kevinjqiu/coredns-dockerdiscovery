@@ -164,11 +164,11 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 			continue
 		} else {
 			network, ok := container.NetworkSettings.Networks[networkMode]
-			if !ok {
+			if !ok { // sometime while "network:disconnect" event fire
 				return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
 			}
 
-			return net.ParseIP(network.IPAddress), nil  // ParseIP return nil when IPAddress equals "" sometime while "network:disconnect" event fire
+			return net.ParseIP(network.IPAddress), nil  // ParseIP return nil when IPAddress equals ""
 		}
 	}
 }
