@@ -168,7 +168,7 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 				return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
 			}
 
-			return net.ParseIP(network.IPAddress), nil  // ParseIP return nil when IPAddress equals ""
+			return net.ParseIP(network.IPAddress), nil  // ParseIP return nil when IPAddress equals "" sometime while "network:disconnect" event fire
 		}
 	}
 }
@@ -176,21 +176,13 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
 	_, isExist := dd.containerInfoMap[container.ID]
 	containerAddress, err := dd.getContainerAddress(container)
-	if err != nil {
-		if isExist {
-			dd.removeContainerInfo(container.ID) // with log
-		}
-		return err
-	}
-	if containerAddress == nil { // sometime while "network:disconnect" event fire
-		if isExist {
-			dd.removeContainerInfo(container.ID)
-		}
-		return nil
-	}
-
 	if isExist { // remove previous resolved container info
 		delete(dd.containerInfoMap, container.ID)
+	}
+
+	if err != nil || containerAddress == nil {
+		log.Printf("[docker] Remove container entry %s (%s)", container.Name, container.ID[:12])
+		return err
 	}
 
 	domains, _ := dd.resolveDomainsByContainer(container)
@@ -205,7 +197,7 @@ func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) er
 			log.Printf("[docker] Add entry of container %s (%s). IP: %v", container.Name, container.ID[:12], containerAddress)
 		}
 	} else if isExist {
-		log.Printf("[docker] Remove container entry  %s (%s)", container.Name, container.ID[:12])
+		log.Printf("[docker] Remove container entry %s (%s)", container.Name, container.ID[:12])
 	}
 	return nil
 }
