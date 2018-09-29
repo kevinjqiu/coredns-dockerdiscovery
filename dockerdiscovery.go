@@ -264,11 +264,11 @@ func (dd DockerDiscovery) start() error {
 
 				container, err := dd.dockerClient.InspectContainer(msg.Actor.Attributes["container"])
 				if err != nil {
-					log.Printf("[docker] Event error %s #%s: %s", event, msg.ID, err)
+					log.Printf("[docker] Event error %s #%s: %s", event, msg.Actor.Attributes["container"][:12], err)
 					return
 				}
 				if err := dd.updateContainerInfo(container); err != nil {
-					log.Printf("[docker] Error adding A record for container %s: %s", msg.ID, err)
+					log.Printf("[docker] Error adding A record for container %s: %s", container.ID[:12], err)
 				}
 			case "network:disconnect":
 				log.Printf("[docker] Container %s being disconnected from network %s", msg.Actor.Attributes["container"][:12], msg.Actor.Attributes["name"])
