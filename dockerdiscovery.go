@@ -26,44 +26,6 @@ type ContainerDomainResolver interface {
 	resolve(container *dockerapi.Container) ([]string, error)
 }
 
-
-
-type SubDomainHostResolver struct {
-	domain string
-}
-func (resolver SubDomainHostResolver) resolve(container *dockerapi.Container) ([]string, error) {
-	var domains []string
-	domains = append(domains, fmt.Sprintf("%s.%s", container.Config.Hostname, resolver.domain))
-	return domains, nil
-}
-
-
-
-type NetworkAliasesResolver struct {
-	network string
-}
-func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) ([]string, error) {
-	var domains []string
-
-	if resolver.network != "" {
-		network, ok := container.NetworkSettings.Networks[resolver.network]
-		if ok {
-			domains = append(domains, network.Aliases...)
-		}
-	} else {
-		for _, network := range container.NetworkSettings.Networks {
-			domains = append(domains, network.Aliases...)
-		}
-	}
-
-	for i, d := range domains {
-		domains[i] = fmt.Sprintf("%s.", d)
-	}
-
-	return domains, nil
-}
-
-
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
 	Next           plugin.Handler
@@ -95,6 +57,7 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 }
 
 func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, error) {
+	fmt.Println(domain);
 	for _, containerInfo := range dd.containerInfoMap {
 		for _, d := range containerInfo.domains {
 			if d == domain {
@@ -110,6 +73,7 @@ func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, 
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
 	var answers []dns.RR
+	fmt.Println(state.QName())
 	switch state.QType() {
 	case dns.TypeA:
 		containerInfo, _ := dd.containerInfoByDomain(state.QName())

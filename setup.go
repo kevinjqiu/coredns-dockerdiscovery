@@ -22,6 +22,8 @@ func init() {
 // TODO(kevinjqiu): add docker endpoint verification
 func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 	dd := NewDockerDiscovery(defaultDockerEndpoint)
+	labelResolver := &LabelResolver{hostLabel: "coredns.dockerdiscovery.host"}
+	dd.resolvers = append(dd.resolvers, labelResolver)
 
 	for c.Next() {
 		args := c.RemainingArgs()
@@ -54,6 +56,11 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 					return dd, c.ArgErr()
 				}
 				resolver.network = c.Val()
+			case "label":
+				if !c.NextArg() {
+					return dd, c.ArgErr()
+				}
+				labelResolver.hostLabel = c.Val()
 			default:
 				return dd, c.Errf("unknown property: '%s'", c.Val())
 			}

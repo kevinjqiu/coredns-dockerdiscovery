@@ -70,6 +70,7 @@ func TestSetupDockerDiscovery(t *testing.T) {
 		Name: "evil_ptolemy",
 		Config: &dockerapi.Config{
 			Hostname: "nginx",
+			Labels: map[string]string{"coredns.dockerdiscovery.host": "label-host.loc"},
 		},
 		NetworkSettings: &dockerapi.NetworkSettings{
 			Networks: networks,
@@ -96,4 +97,7 @@ func TestSetupDockerDiscovery(t *testing.T) {
 
 	containerInfo, e = dd.containerInfoByDomain("wrong.home.example.org.")
 	assert.Nil(t, containerInfo)
+
+	containerInfo, e = dd.containerInfoByDomain("label-host.loc.")
+	assert.NotNil(t, containerInfo)
 }
