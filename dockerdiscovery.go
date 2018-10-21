@@ -57,7 +57,6 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 }
 
 func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, error) {
-	fmt.Println(domain);
 	for _, containerInfo := range dd.containerInfoMap {
 		for _, d := range containerInfo.domains {
 			if d == domain {
@@ -73,7 +72,6 @@ func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, 
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
 	var answers []dns.RR
-	fmt.Println(state.QName())
 	switch state.QType() {
 	case dns.TypeA:
 		containerInfo, _ := dd.containerInfoByDomain(state.QName())
@@ -204,7 +202,6 @@ func (dd DockerDiscovery) start() error {
 	for msg := range events {
 		go func(msg *dockerapi.APIEvents) {
 			event := fmt.Sprintf("%s:%s", msg.Type, msg.Action)
-			// fmt.Println("[docker] Event %s", event)
 			switch event {
 			case "container:start":
 				log.Println("[docker] New container spawned. Attempt to add A record for it")
