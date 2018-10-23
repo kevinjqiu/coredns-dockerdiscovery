@@ -30,10 +30,6 @@ func (resolver LabelResolver) resolve(container *dockerapi.Container) ([]string,
 		}
 	}
 
-	for i, d := range domains { // TODO move out. append dot later
-		domains[i] = fmt.Sprintf("%s.", d)
-	}
-
 	return domains, nil
 }
 
@@ -54,10 +50,6 @@ func (resolver NetworkAliasesResolver) resolve(container *dockerapi.Container) (
 		for _, network := range container.NetworkSettings.Networks {
 			domains = append(domains, network.Aliases...)
 		}
-	}
-
-	for i, d := range domains {
-		domains[i] = fmt.Sprintf("%s.", d)
 	}
 
 	return domains, nil

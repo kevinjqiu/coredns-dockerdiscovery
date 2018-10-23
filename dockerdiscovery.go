@@ -22,7 +22,7 @@ type ContainerInfo struct {
 type ContainerInfoMap map[string]*ContainerInfo
 
 type ContainerDomainResolver interface {
-	// return domains
+	// return domains without trailing dot
 	resolve(container *dockerapi.Container) ([]string, error)
 }
 
@@ -56,10 +56,11 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 	return domains, nil
 }
 
-func (dd DockerDiscovery) containerInfoByDomain(domain string) (*ContainerInfo, error) {
+func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerInfo, error) {
+	fmt.Println(requestName);
 	for _, containerInfo := range dd.containerInfoMap {
 		for _, d := range containerInfo.domains {
-			if d == domain {
+			if fmt.Sprintf("%s.", d) == requestName { // qualified domain name must be specified with a trailing dot
 				return containerInfo, nil
 			}
 		}

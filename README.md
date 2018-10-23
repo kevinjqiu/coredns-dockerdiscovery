@@ -48,7 +48,7 @@ Example
 
     .:15353 {
         docker unix:///var/run/docker.sock {
-            domain docker.local.
+            domain docker.local
         }
         log
     }
