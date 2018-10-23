@@ -52,7 +52,7 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 
 	c := caddy.NewTestController("dns", `docker unix:///home/user/docker.sock {
-	domain home.example.org.
+	domain home.example.org
 	network_aliases my_project_network_name
 }`)
 	dd, err := createPlugin(c)
