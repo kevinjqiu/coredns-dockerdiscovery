@@ -57,7 +57,6 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 }
 
 func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerInfo, error) {
-	fmt.Println(requestName);
 	for _, containerInfo := range dd.containerInfoMap {
 		for _, d := range containerInfo.domains {
 			if fmt.Sprintf("%s.", d) == requestName { // qualified domain name must be specified with a trailing dot
