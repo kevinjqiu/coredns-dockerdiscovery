@@ -7,6 +7,16 @@ import (
 
 // resolvers implements ContainerDomainResolver
 
+type SubDomainContainerNameResolver struct {
+	domain string
+}
+func (resolver SubDomainContainerNameResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+	domains = append(domains, fmt.Sprintf("%s.%s", container.Name, resolver.domain))
+	return domains, nil
+}
+
+
 type SubDomainHostResolver struct {
 	domain string
 }

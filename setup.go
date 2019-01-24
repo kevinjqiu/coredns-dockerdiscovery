@@ -10,7 +10,7 @@ import (
 )
 
 const defaultDockerEndpoint = "unix:///var/run/docker.sock"
-const defaultDockerDomain = "docker.local."
+const defaultDockerDomain = "docker.local"
 
 func init() {
 	caddy.RegisterPlugin("docker", caddy.Plugin{
@@ -39,6 +39,15 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 			var value = c.Val()
 			switch value {
 			case "domain":
+				var resolver = &SubDomainContainerNameResolver{
+					domain: defaultDockerDomain,
+				}
+				dd.resolvers = append(dd.resolvers, resolver)
+				if !c.NextArg() {
+					return dd, c.ArgErr()
+				}
+				resolver.domain = c.Val()
+			case "hostname_domain":
 				var resolver = &SubDomainHostResolver{
 					domain: defaultDockerDomain,
 				}
