@@ -70,7 +70,7 @@ Start a docker container:
     $ docker run -d --name my-alpine --hostname alpine alpine sleep 1000
     78c2a06ef2a9b63df857b7985468f7310bba0d9ea4d0d2629343aff4fd171861
 
-Use CoreDNS as your resolver to resolve the `my-alpine.docker.loc` or `alpha.docker.loc`:
+Use CoreDNS as your resolver to resolve the `my-alpine.docker.loc` or `alpine.docker.loc`:
 
     $ dig @localhost -p 15353 my-alpine.docker.loc
 
