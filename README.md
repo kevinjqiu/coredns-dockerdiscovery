@@ -13,15 +13,16 @@ Syntax
 
     docker [DOCKER_ENDPOINT] {
         domain DOMAIN_NAME
+        hostname_domain HOSTNAME_DOMAIN_NAME
         network_aliases DOCKER_NETWORK
         label LABEL
     }
 
-
 * `DOCKER_ENDPOINT`: the path to the docker socket. If unspecified, defaults to `unix:///var/run/docker.sock`. It can also be TCP socket, such as `tcp://127.0.0.1:999`.
-* `DOMAIN_NAME`: the name of the domain you want your containers to be part of. e.g., when `DOMAIN_NAME` is `docker.local`, your `mysql-0` container will be assigned the domain name: `mysql-0.docker.local`.
-* `DOCKER_NETWORK`: the name of the docker network. Resolve by network aliases as hosts (like internal docker dns resolve host by aliases whole network)
-* `LABEL`: label of resolving host (by default equals ```coredns.dockerdiscovery.host```)
+* `DOMAIN_NAME`: the name of the domain for [container name](https://docs.docker.com/engine/reference/run/#name---name), e.g. when `DOMAIN_NAME` is `docker.loc`, your container with `my-nginx` (as subdomain) [name](https://docs.docker.com/engine/reference/run/#name---name) will be assigned the domain name: `my-nginx.docker.loc`
+* `HOSTNAME_DOMAIN_NAME`: the name of the domain for [hostname](https://docs.docker.com/config/containers/container-networking/#ip-address-and-hostname). Work same as `DOMAIN_NAME` for hostname.
+* `DOCKER_NETWORK`: the name of the docker network. Resolve directly by [network aliases](https://docs.docker.com/v17.09/engine/userguide/networking/configure-dns) (like internal docker dns resolve host by aliases whole network)
+* `LABEL`: container label of resolving host (by default enable and equals ```coredns.dockerdiscovery.host```)
 
 How To Build
 ------------
@@ -48,7 +49,8 @@ Example
 
     .:15353 {
         docker unix:///var/run/docker.sock {
-            domain docker.local
+            domain docker.loc
+            hostname_domain docker-host.loc
         }
         log
     }
@@ -65,14 +67,14 @@ Start CoreDNS:
 
 Start a docker container:
 
-    $ docker run -d --hostname alpha alpine sleep 1000
+    $ docker run -d --name my-alpine --hostname alpine alpine sleep 1000
     78c2a06ef2a9b63df857b7985468f7310bba0d9ea4d0d2629343aff4fd171861
 
-Use CoreDNS as your resolver to resolve the `alpha.docker.local`:
+Use CoreDNS as your resolver to resolve the `my-alpine.docker.loc` or `alpine.docker-host.loc`:
 
-    $ dig @localhost -p 15353 alpha.docker.local
+    $ dig @localhost -p 15353 my-alpine.docker.loc
 
-    ; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 15353 alpha.docker.local
+    ; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 15353 my-alpine.docker.loc
     ; (1 server found)
     ;; global options: +cmd
     ;; Got answer:
@@ -82,45 +84,32 @@ Use CoreDNS as your resolver to resolve the `alpha.docker.local`:
     ;; OPT PSEUDOSECTION:
     ; EDNS: version: 0, flags:; udp: 4096
     ;; QUESTION SECTION:
-    ;alpha.docker.local.            IN      A
+    ;my-alpine.docker.loc.            IN      A
 
     ;; ANSWER SECTION:
-    alpha.docker.local.     3600    IN      A       172.17.0.2
+    my-alpine.docker.loc.     3600    IN      A       172.17.0.2
 
     ;; Query time: 0 msec
     ;; SERVER: 127.0.0.1#15353(127.0.0.1)
     ;; WHEN: Thu Apr 26 22:39:55 EDT 2018
     ;; MSG SIZE  rcvd: 63
 
-Stop the docker container will remove the DNS entry for `alpha.docker.local`:
+Stop the docker container will remove the corresponded DNS entries:
 
-    $ docker stop 78c2a
+    $ docker stop my-alpine
     78c2a
 
+    $ dig @localhost -p 15353 my-alpine.docker.loc
 
-    $ dig @localhost -p 15353 alpha.docker.local
-
-    ; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 15353 alpha.docker.local
-    ; (1 server found)
-    ;; global options: +cmd
-    ;; Got answer:
-    ;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 52639
-    ;; flags: qr rd; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
-    ;; WARNING: recursion requested but not available
-
-    ;; OPT PSEUDOSECTION:
-    ; EDNS: version: 0, flags:; udp: 4096
     ;; QUESTION SECTION:
-    ;alpha.docker.local.            IN      A
+    ;my-alpine.docker.loc.            IN      A
 
-    ;; Query time: 0 msec
-    ;; SERVER: 127.0.0.1#15353(127.0.0.1)
-    ;; WHEN: Thu Apr 26 22:41:38 EDT 2018
-    ;; MSG SIZE  rcvd: 47
+Container will be resolved by label as ```nginx.loc```
 
-Can resolve container by network aliases
-     
-`Corefile`:
+    docker run --label=coredns.dockerdiscovery.host=nginx.loc nginx
+
+#### Can resolve container by network aliases.
+Create `Corefile` file:
 
     my-project.loc:15353 {
         docker unix:///var/run/docker.sock {
@@ -129,7 +118,7 @@ Can resolve container by network aliases
         log
     } 
   
-Create my_project_network and container
+Create `my_project_network` network and container
  
     docker create network my_project_network
     docker run --network my_project_network --alias postgres.my-project.loc postgres
@@ -151,9 +140,5 @@ Or example for `docker-compose.yml`:
           name: my_project_network  
        
 Check
-       
+
     $ dig @localhost -p 15353 postgres.my-project.loc
-
-Will resolve by label as ```nginx.loc```
-
-    docker run --rm --label=coredns.dockerdiscovery.host=nginx.loc nginx
