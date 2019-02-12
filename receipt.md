@@ -103,7 +103,7 @@ Check out access to container via local dns `payment.my-project.loc`, `auth.my-p
     $ dig payment.my-project.loc
     
     ;; ANSWER SECTION:
-    my-rabbitmq.docker.loc. 2335 IN A 172.20.0.2
+    payment.my-project.loc. 2335 IN A 172.20.0.2
 
 Our localhost and all containers in `my_project_network` network have access to each other by aliases.
 It's let you reach any services without reverse proxy and avoid ports conflict, confused specified unique published ports.
