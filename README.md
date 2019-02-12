@@ -109,4 +109,4 @@ Container will be resolved by label as ```nginx.loc```
     docker run --label=coredns.dockerdiscovery.host=nginx.loc nginx
 
 
- See receipt [how install for local development](receipt.md)
+ See receipt [how install for local development](setup.md)

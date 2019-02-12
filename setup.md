@@ -1,6 +1,3 @@
-Receipts of useing coredns-dockerdiscovery plugin
-===================================
-
 Install for local development
 ---
 
