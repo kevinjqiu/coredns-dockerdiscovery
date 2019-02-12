@@ -6,174 +6,104 @@ Install for local development
 
 Create `Corefile`
     
-    .:53 {
+    loc:53 {
         docker unix:///var/run/docker.sock {
-            domain docker.local
+            domain docker.loc
         }
         cache 20
         log
     }
 
 Run coredns in alpine container with assigned static ip. Specify any network is required.
+`${PWD}/coredns` path to executed coredns file. See `How To Build` section in [README.md](README.md)
 
-    docker run -v /var/run/docker.sock:/var/run/docker.sock -v ${PWD}/coredns:/coredns -v ${HOME}/Corefile:/Corefile --network=skyeng_network --ip=172.19.5.5 --name=coredns --restart=unless-stopped -d alpine /coredns 
+    docker run -v /var/run/docker.sock:/var/run/docker.sock -v ${PWD}/coredns:/coredns -v ${HOME}/Corefile:/Corefile --network=any_network --ip=172.19.5.5 --name=coredns --restart=unless-stopped -d alpine /coredns 
 
-Install resolvconf https://en.wikipedia.org/wiki/Resolvconf packet if you don't have
+Note --ip  have `any_network` mask (in my case 172.19.0.0)
+Run any container for test and check out to correct resolve of container (coredns container ip is specified)
+    
+    docker run --name my-rabbitmq rabbitmq 
+    dig @172.19.5.5 my-rabbitmq.docker.loc
+    
+    ;; ANSWER SECTION:
+    my-rabbitmq.docker.loc. 2335 IN A 172.17.0.2
 
-Add coredns ip to resolve.conf
+Install [resolvconf](https://en.wikipedia.org/wiki/Resolvconf) packet if you don't have
+
+Add coredns's container ip to resolve.conf
     
     echo "nameserver 172.19.5.5" | sudo tee --append /etc/resolvconf/resolv.conf.d/tail
+    sudo resolvconf -u
+
+Check container resolving
+
+    dig my-rabbitmq.docker.loc
+    my-rabbitmq.docker.loc. 2335 IN A 172.17.0.2
+
+Open in your browser http://my-rabbitmq.docker.loc:15672 (rabbitmq dashboard work on 15672 by default)
 
 Development with multiple docker-compose microservices
 ----
 
-
-Syntax
-------
-
-    docker [DOCKER_ENDPOINT] {
-        domain DOMAIN_NAME
-        network_aliases DOCKER_NETWORK
-        label LABEL
-    }
-
-
-* `DOCKER_ENDPOINT`: the path to the docker socket. If unspecified, defaults to `unix:///var/run/docker.sock`. It can also be TCP socket, such as `tcp://127.0.0.1:999`.
-* `DOMAIN_NAME`: the name of the domain you want your containers to be part of. e.g., when `DOMAIN_NAME` is `docker.local`, your `mysql-0` container will be assigned the domain name: `mysql-0.docker.local`.
-* `DOCKER_NETWORK`: the name of the docker network. Resolve by network aliases as hosts (like internal docker dns resolve host by aliases whole network)
-* `LABEL`: label of resolving host (by default equals ```coredns.dockerdiscovery.host```)
-
-How To Build
-------------
-
-`make coredns`
-
-Alternatively, you can use the following manual steps:
-
-1. Checkout coredns:  `go get github.com/coredns/coredns`.
-2. `cd $GOPATH/src/github.com/coredns/coredns`
-3. `echo "docker:github.com/kevinjqiu/coredns-dockerdiscovery" >> plugin.cfg`
-4. `go generate`
-5. `make`
-
-Alternatively, run insider docker container
-
-    docker build -t coredns-dockerdiscovery .
-    docker run --rm -v ${HOME}/Corefile:/coredns/Corefile -v /var/run/docker.sock:/var/run/docker.sock -p 15353:15353/udp coredns-dockerdiscovery -conf /coredns/Corefile
-
-Example
--------
-
-`Corefile`:
-
-    .:15353 {
-        docker unix:///var/run/docker.sock {
-            domain docker.local
-        }
-        log
-    }
-
-Start CoreDNS:
-
-    $ ./coredns
-
-    .:15353
-    2018/04/26 22:36:32 [docker] start
-    2018/04/26 22:36:32 [INFO] CoreDNS-1.1.1
-    2018/04/26 22:36:32 [INFO] linux/amd64, go1.10.1,
-    CoreDNS-1.1.1
-
-Start a docker container:
-
-    $ docker run -d --hostname alpha alpine sleep 1000
-    78c2a06ef2a9b63df857b7985468f7310bba0d9ea4d0d2629343aff4fd171861
-
-Use CoreDNS as your resolver to resolve the `alpha.docker.local`:
-
-    $ dig @localhost -p 15353 alpha.docker.local
-
-    ; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 15353 alpha.docker.local
-    ; (1 server found)
-    ;; global options: +cmd
-    ;; Got answer:
-    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 61786
-    ;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
-
-    ;; OPT PSEUDOSECTION:
-    ; EDNS: version: 0, flags:; udp: 4096
-    ;; QUESTION SECTION:
-    ;alpha.docker.local.            IN      A
-
-    ;; ANSWER SECTION:
-    alpha.docker.local.     3600    IN      A       172.17.0.2
-
-    ;; Query time: 0 msec
-    ;; SERVER: 127.0.0.1#15353(127.0.0.1)
-    ;; WHEN: Thu Apr 26 22:39:55 EDT 2018
-    ;; MSG SIZE  rcvd: 63
-
-Stop the docker container will remove the DNS entry for `alpha.docker.local`:
-
-    $ docker stop 78c2a
-    78c2a
-
-
-    $ dig @localhost -p 15353 alpha.docker.local
-
-    ; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 15353 alpha.docker.local
-    ; (1 server found)
-    ;; global options: +cmd
-    ;; Got answer:
-    ;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 52639
-    ;; flags: qr rd; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
-    ;; WARNING: recursion requested but not available
-
-    ;; OPT PSEUDOSECTION:
-    ; EDNS: version: 0, flags:; udp: 4096
-    ;; QUESTION SECTION:
-    ;alpha.docker.local.            IN      A
-
-    ;; Query time: 0 msec
-    ;; SERVER: 127.0.0.1#15353(127.0.0.1)
-    ;; WHEN: Thu Apr 26 22:41:38 EDT 2018
-    ;; MSG SIZE  rcvd: 47
-
-Can resolve container by network aliases
-     
-`Corefile`:
+Create `Corefile`
 
     my-project.loc:15353 {
         docker unix:///var/run/docker.sock {
             network_aliases my_project_network
         }
+        cache 20
         log
-    } 
-  
-Create my_project_network and container
+    }
+
+Create `my_project_network` network
  
     docker create network my_project_network
-    docker run --network my_project_network --alias postgres.my-project.loc postgres
 
-Or example for `docker-compose.yml`:
+Example `docker-compose.yml` for multiple services project.
+Add external network `my_project_network` to every compose file.
+
+Payment service:
 
     version: "3.7"
 
     services:
-      postgres:
-        image: postgres:latest
+      nginx:
+        image: nginx:latest
         networks:
           default:
             aliases:
-              - postgres.my-project.loc
+              - payment.my-project.loc
     networks:
       default:
         external:
-          name: my_project_network  
-       
-Check
-       
-    $ dig @localhost -p 15353 postgres.my-project.loc
+          name: my_project_network
 
-Will resolve by label as ```nginx.loc```
+Auth service:
 
-    docker run --rm --label=coredns.dockerdiscovery.host=nginx.loc nginx
+    version: "3.7"
+    
+    services:
+      nginx:
+        image: nginx:latest
+        networks:
+          default:
+            aliases:
+              - auth.my-project.loc
+    networks:
+      default:
+        external:
+          name: my_project_network
+
+Or run container with specify our network  
+
+    docker run --network my_project_network --alias postgres.my-project.loc postgres
+       
+Check out access to container via local dns `payment.my-project.loc`, `auth.my-project.loc` and `postgres.my-project.loc`
+
+    $ dig payment.my-project.loc
+    
+    ;; ANSWER SECTION:
+    my-rabbitmq.docker.loc. 2335 IN A 172.20.0.2
+
+Our localhost and all containers in `my_project_network` network have access to each other by aliases.
+It's let you reach any services without reverse proxy and avoid ports conflict, confused specified unique published ports.
