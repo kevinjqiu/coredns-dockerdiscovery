@@ -1,6 +1,7 @@
 package dockerdiscovery
 
 import (
+	"fmt"
 	"testing"
 	"net"
 
@@ -30,14 +31,14 @@ func TestSetupDockerDiscovery(t *testing.T) {
 		},
 		setupDockerDiscoveryTestCase{
 			`docker {
-	domain example.org.
+	hostname_domain example.org.
 }`,
 			defaultDockerEndpoint,
 			"example.org.",
 		},
 		setupDockerDiscoveryTestCase{
 			`docker unix:///home/user/docker.sock {
-	domain home.example.org.
+	hostname_domain home.example.org.
 }`,
 			"unix:///home/user/docker.sock",
 			"home.example.org.",
@@ -52,7 +53,8 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 
 	c := caddy.NewTestController("dns", `docker unix:///home/user/docker.sock {
-	domain home.example.org
+	hostname_domain home.example.org
+	domain docker.loc
 	network_aliases my_project_network_name
 }`)
 	dd, err := createPlugin(c)
@@ -100,4 +102,9 @@ func TestSetupDockerDiscovery(t *testing.T) {
 
 	containerInfo, e = dd.containerInfoByDomain("label-host.loc.")
 	assert.NotNil(t, containerInfo)
+
+
+	containerInfo, e = dd.containerInfoByDomain(fmt.Sprintf("%s.docker.loc.", container.Name))
+	assert.NotNil(t, containerInfo)
+	assert.Equal(t, container.Name, containerInfo.container.Name)
 }
