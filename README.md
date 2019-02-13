@@ -108,37 +108,5 @@ Container will be resolved by label as ```nginx.loc```
 
     docker run --label=coredns.dockerdiscovery.host=nginx.loc nginx
 
-#### Can resolve container by network aliases.
-Create `Corefile` file:
 
-    my-project.loc:15353 {
-        docker unix:///var/run/docker.sock {
-            network_aliases my_project_network
-        }
-        log
-    } 
-  
-Create `my_project_network` network and container
- 
-    docker create network my_project_network
-    docker run --network my_project_network --alias postgres.my-project.loc postgres
-
-Or example for `docker-compose.yml`:
-
-    version: "3.7"
-
-    services:
-      postgres:
-        image: postgres:latest
-        networks:
-          default:
-            aliases:
-              - postgres.my-project.loc
-    networks:
-      default:
-        external:
-          name: my_project_network  
-       
-Check
-
-    $ dig @localhost -p 15353 postgres.my-project.loc
+ See receipt [how install for local development](setup.md)
