@@ -3,6 +3,7 @@ package dockerdiscovery
 import (
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"fmt"
+	"strings"
 )
 
 // resolvers implements ContainerDomainResolver
@@ -12,7 +13,7 @@ type SubDomainContainerNameResolver struct {
 }
 func (resolver SubDomainContainerNameResolver) resolve(container *dockerapi.Container) ([]string, error) {
 	var domains []string
-	domains = append(domains, fmt.Sprintf("%s.%s", container.Name, resolver.domain))
+	domains = append(domains, fmt.Sprintf("%s.%s", strings.TrimLeft(container.Name, "/"), resolver.domain))
 	return domains, nil
 }
 
