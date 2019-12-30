@@ -27,7 +27,14 @@ Syntax
 How To Build
 ------------
 
-`make coredns`
+    GO111MODULE=on go get -u github.com/coredns/coredns
+    GO111MODULE=on go get github.com/kevinjqiu/coredns-dockerdiscovery
+    cd ~/go/src/github.com/coredns/coredns
+    echo "docker:github.com/kevinjqiu/coredns-dockerdiscovery" >> plugin.cfg
+    cat plugin.cfg | uniq > plugin.cfg.tmp
+    mv plugin.cfg.tmp plugin.cfg
+    make all
+    ~/go/src/github.com/coredns/coredns/coredns --version
 
 Alternatively, you can use the following manual steps:
 
@@ -41,6 +48,10 @@ Alternatively, run insider docker container
 
     docker build -t coredns-dockerdiscovery .
     docker run --rm -v ${HOME}/Corefile:/coredns/Corefile -v /var/run/docker.sock:/var/run/docker.sock -p 15353:15353/udp coredns-dockerdiscovery -conf /coredns/Corefile
+
+Run tests
+
+    go test -v
 
 Example
 -------

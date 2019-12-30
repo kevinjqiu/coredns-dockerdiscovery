@@ -70,7 +70,7 @@ func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerI
 
 // ServeDNS implements plugin.Handler
 func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	state := request.Request{W: w, Req: r, Context: ctx}
+	state := request.Request{W: w, Req: r}
 	var answers []dns.RR
 	switch state.QType() {
 	case dns.TypeA:
