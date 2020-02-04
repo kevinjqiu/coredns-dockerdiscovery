@@ -2,9 +2,7 @@ FROM golang:1.13.7-stretch
 
 ENV GO111MODULE=on
 
-RUN mkdir -p $GOPATH/src/github.com/kevinjqiu/coredns-dockerdiscovery
-COPY . /tmp/coredns-dockerdiscovery
-RUN mv /tmp/coredns-dockerdiscovery/* $GOPATH/src/github.com/kevinjqiu/coredns-dockerdiscovery
+COPY . $GOPATH/src/github.com/kevinjqiu/coredns-dockerdiscovery
 RUN cd $GOPATH/src/github.com/kevinjqiu/coredns-dockerdiscovery && go mod download
 
 WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v1.6.7
