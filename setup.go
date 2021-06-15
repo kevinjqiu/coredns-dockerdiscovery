@@ -6,7 +6,7 @@ import (
 
 	dockerapi "github.com/fsouza/go-dockerclient"
 
-	"github.com/caddyserver/caddy"
+	"github.com/coredns/caddy"
 )
 
 const defaultDockerEndpoint = "unix:///var/run/docker.sock"

@@ -2,14 +2,13 @@ package dockerdiscovery
 
 import (
 	"fmt"
-	"testing"
 	"net"
+	"testing"
 
-	"github.com/caddyserver/caddy"
-	"github.com/stretchr/testify/assert"
+	"github.com/coredns/caddy"
 	dockerapi "github.com/fsouza/go-dockerclient"
-
-	)
+	"github.com/stretchr/testify/assert"
+)
 
 type setupDockerDiscoveryTestCase struct {
 	configBlock            string
@@ -68,18 +67,17 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 	var address = net.ParseIP("192.11.0.1")
 	var container = &dockerapi.Container{
-		ID: "fa155d6fd141e29256c286070d2d44b3f45f1e46822578f1e7d66c1e7981e6c7",
+		ID:   "fa155d6fd141e29256c286070d2d44b3f45f1e46822578f1e7d66c1e7981e6c7",
 		Name: "evil_ptolemy",
 		Config: &dockerapi.Config{
 			Hostname: "nginx",
-			Labels: map[string]string{"coredns.dockerdiscovery.host": "label-host.loc"},
+			Labels:   map[string]string{"coredns.dockerdiscovery.host": "label-host.loc"},
 		},
 		NetworkSettings: &dockerapi.NetworkSettings{
-			Networks: networks,
+			Networks:  networks,
 			IPAddress: address.String(),
 		},
 	}
-
 
 	e := dd.updateContainerInfo(container)
 	assert.Nil(t, e)
@@ -102,7 +100,6 @@ func TestSetupDockerDiscovery(t *testing.T) {
 
 	containerInfo, e = dd.containerInfoByDomain("label-host.loc.")
 	assert.NotNil(t, containerInfo)
-
 
 	containerInfo, e = dd.containerInfoByDomain(fmt.Sprintf("%s.docker.loc.", container.Name))
 	assert.NotNil(t, containerInfo)
