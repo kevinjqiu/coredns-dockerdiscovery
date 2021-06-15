@@ -5,7 +5,7 @@ RUN go mod download github.com/coredns/coredns@v1.7.0
 WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v1.7.0
 RUN go mod download
 
-RUN echo "docker:github.com/kevinjqiu/coredns-dockerdiscovery" >> plugin.cfg
+RUN sed -i '50 i docker:github.com/kevinjqiu/coredns-dockerdiscovery' plugin.cfg
 ENV CGO_ENABLED=0
 RUN go generate coredns.go && go build -mod=mod -o=/usr/local/bin/coredns
 
