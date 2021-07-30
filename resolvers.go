@@ -3,6 +3,7 @@ package dockerdiscovery
 import (
 	"fmt"
 	dockerapi "github.com/fsouza/go-dockerclient"
+	"log"
 	"strings"
 )
 
@@ -46,6 +47,27 @@ func (resolver LabelResolver) resolve(container *dockerapi.Container) ([]string,
 		}
 	}
 
+	return domains, nil
+}
+
+// ComposeResolver sets names based on compose labels
+type ComposeResolver struct {
+	domain string
+}
+
+func (resolver ComposeResolver) resolve(container *dockerapi.Container) ([]string, error) {
+	var domains []string
+
+	project, pok := container.Config.Labels["com.docker.compose.project"]
+	service, sok := container.Config.Labels["com.docker.compose.service"]
+	if !pok || !sok {
+		return domains, nil
+	}
+
+	domain := fmt.Sprintf("%s.%s.%s", service, project, resolver.domain)
+	domains = append(domains, domain)
+
+	log.Printf("[docker] Found compose domain for container %s: %s", container.ID[:12], domain)
 	return domains, nil
 }
 
