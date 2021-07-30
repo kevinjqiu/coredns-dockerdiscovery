@@ -87,6 +87,45 @@ func TestSetupDockerDiscovery(t *testing.T) {
 	}
 }
 
+func TestMultipleNetworksDockerDiscovery(t *testing.T) {
+	networkName := "my_project_network_name"
+	address := net.ParseIP("192.11.0.1")
+	expectedAddress := net.ParseIP("9.14.1.30")
+	expectedNet := "inquisition"
+
+	c := caddy.NewTestController("dns", fmt.Sprintf(`docker unix:///home/user/docker.sock {
+	compose_domain compose.loc
+	hostname_domain home.example.org
+	domain docker.loc
+	network_aliases %s
+}`, networkName))
+	dd, err := createPlugin(c)
+	assert.Nil(t, err)
+
+	// generate a configuration; tweak to add a second network
+	container := genContainerDefn("", networkName, address.String())
+	container.NetworkSettings.Networks[expectedNet] = dockerapi.ContainerNetwork{
+		Aliases:   []string{"myproject.loc"},
+		IPAddress: expectedAddress.String(),
+	}
+
+	err = dd.updateContainerInfo(container)
+	assert.Nil(t, err)
+
+	// without label, we expect the "NetworkMode" address to prevail
+	_ = ipOk(t, dd, "label-host.loc.", address)
+
+	// now, update for the label and try this again
+
+	container.Config.Labels["coredns.dockerdiscovery.network"] = expectedNet
+	err = dd.updateContainerInfo(container)
+	assert.Nil(t, err)
+
+	_ = ipOk(t, dd, "label-host.loc.", expectedAddress)
+
+	return
+}
+
 // simple check
 func ipOk(t *testing.T, dd DockerDiscovery, domain string, address net.IP) *ContainerInfo {
 

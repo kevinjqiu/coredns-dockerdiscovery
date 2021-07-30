@@ -106,12 +106,18 @@ func (dd DockerDiscovery) Name() string {
 }
 
 func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (net.IP, error) {
+
+	// save this away
+	netName, hasNetName := container.Config.Labels["coredns.dockerdiscovery.network"]
+
+	var networkMode string
+
 	for {
 		if container.NetworkSettings.IPAddress != "" {
 			return net.ParseIP(container.NetworkSettings.IPAddress), nil
 		}
 
-		networkMode := container.HostConfig.NetworkMode
+		networkMode = container.HostConfig.NetworkMode
 
 		// TODO: Deal with containers run with host ip (--net=host)
 		// if networkMode == "host" {
@@ -127,16 +133,22 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 			if err != nil {
 				return nil, err
 			}
-			continue
 		} else {
-			network, ok := container.NetworkSettings.Networks[networkMode]
-			if !ok { // sometime while "network:disconnect" event fire
-				return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
-			}
-
-			return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
+			break
 		}
 	}
+
+	network, ok := container.NetworkSettings.Networks[networkMode]
+	if hasNetName {
+		log.Printf("[docker] network name %s specified (%s)", netName, container.ID[:12])
+		network, ok = container.NetworkSettings.Networks[netName]
+	}
+
+	if !ok { // sometime while "network:disconnect" event fire
+		return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
+	}
+
+	return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
 }
 
 func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
