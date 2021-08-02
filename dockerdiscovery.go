@@ -1,16 +1,16 @@
 package dockerdiscovery
 
 import (
-	"github.com/coredns/coredns/plugin"
-	dockerapi "github.com/fsouza/go-dockerclient"
-	"fmt"
-	"net"
 	"context"
-	"github.com/miekg/dns"
-	"github.com/coredns/coredns/request"
-	"log"
-	"strings"
 	"errors"
+	"fmt"
+	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/request"
+	dockerapi "github.com/fsouza/go-dockerclient"
+	"github.com/miekg/dns"
+	"log"
+	"net"
+	"strings"
 )
 
 type ContainerInfo struct {
@@ -28,18 +28,19 @@ type ContainerDomainResolver interface {
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
-	Next           plugin.Handler
-	dockerEndpoint string
-	resolvers 	   []ContainerDomainResolver
-	dockerClient   *dockerapi.Client
-	containerInfoMap   ContainerInfoMap
-	domainIPMap 	map[string]*net.IP
+	Next             plugin.Handler
+	dockerEndpoint   string
+	resolvers        []ContainerDomainResolver
+	dockerClient     *dockerapi.Client
+	containerInfoMap ContainerInfoMap
+	domainIPMap      map[string]*net.IP
 }
+
 // NewDockerDiscovery constructs a new DockerDiscovery object
 func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
 	return DockerDiscovery{
-		dockerEndpoint: dockerEndpoint,
-		containerInfoMap:   make(ContainerInfoMap),
+		dockerEndpoint:   dockerEndpoint,
+		containerInfoMap: make(ContainerInfoMap),
 	}
 }
 
@@ -133,7 +134,7 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 				return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
 			}
 
-			return net.ParseIP(network.IPAddress), nil  // ParseIP return nil when IPAddress equals ""
+			return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
 		}
 	}
 }
@@ -154,8 +155,8 @@ func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) er
 	if len(domains) > 0 {
 		dd.containerInfoMap[container.ID] = &ContainerInfo{
 			container: container,
-			address: containerAddress,
-			domains: domains,
+			address:   containerAddress,
+			domains:   domains,
 		}
 
 		if !isExist {
