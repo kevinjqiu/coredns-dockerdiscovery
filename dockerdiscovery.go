@@ -113,7 +113,7 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 	var networkMode string
 
 	for {
-		if container.NetworkSettings.IPAddress != "" {
+		if container.NetworkSettings.IPAddress != "" && !hasNetName {
 			return net.ParseIP(container.NetworkSettings.IPAddress), nil
 		}
 
