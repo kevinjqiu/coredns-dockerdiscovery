@@ -25,7 +25,7 @@ Syntax
 * `COMPOSE_DOMAIN_NAME`: the name of the domain when it is determined the
     container is managed by docker-compose.  e.g. for a compose project of
     "internal" and service of "nginx", if `COMPOSE_DOMAIN_NAME` is
-    `compose.loc` the fqdn will be `nginx.internal.compoes.loc`
+    `compose.loc` the fqdn will be `nginx.internal.compose.loc`
 * `DOCKER_NETWORK`: the name of the docker network. Resolve directly by [network aliases](https://docs.docker.com/v17.09/engine/userguide/networking/configure-dns) (like internal docker dns resolve host by aliases whole network)
 * `LABEL`: container label of resolving host (by default enable and equals ```coredns.dockerdiscovery.host```)
 
