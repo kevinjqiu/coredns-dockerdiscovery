@@ -56,6 +56,15 @@ func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
 					return dd, c.ArgErr()
 				}
 				resolver.domain = c.Val()
+			case "compose_domain":
+				var resolver = &ComposeResolver{
+					domain: defaultDockerDomain,
+				}
+				dd.resolvers = append(dd.resolvers, resolver)
+				if !c.NextArg() {
+					return dd, c.ArgErr()
+				}
+				resolver.domain = c.Val()
 			case "network_aliases":
 				var resolver = &NetworkAliasesResolver{
 					network: "",
