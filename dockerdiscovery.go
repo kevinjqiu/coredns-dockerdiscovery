@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net"
+	"strings"
+	"sync"
+
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"github.com/miekg/dns"
-	"log"
-	"net"
-	"strings"
 )
 
 type ContainerInfo struct {
@@ -28,10 +30,12 @@ type ContainerDomainResolver interface {
 
 // DockerDiscovery is a plugin that conforms to the coredns plugin interface
 type DockerDiscovery struct {
-	Next             plugin.Handler
-	dockerEndpoint   string
-	resolvers        []ContainerDomainResolver
-	dockerClient     *dockerapi.Client
+	Next           plugin.Handler
+	dockerEndpoint string
+	resolvers      []ContainerDomainResolver
+	dockerClient   *dockerapi.Client
+
+	mutex            sync.RWMutex
 	containerInfoMap ContainerInfoMap
 	domainIPMap      map[string]*net.IP
 }
@@ -58,6 +62,9 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 }
 
 func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerInfo, error) {
+	dd.mutex.RLock()
+	defer dd.mutex.RUnlock()
+
 	for _, containerInfo := range dd.containerInfoMap {
 		for _, d := range containerInfo.domains {
 			if fmt.Sprintf("%s.", d) == requestName { // qualified domain name must be specified with a trailing dot
@@ -152,6 +159,9 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 }
 
 func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
+	dd.mutex.Lock()
+	defer dd.mutex.Unlock()
+
 	_, isExist := dd.containerInfoMap[container.ID]
 	containerAddress, err := dd.getContainerAddress(container)
 	if isExist { // remove previous resolved container info
@@ -181,6 +191,9 @@ func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) er
 }
 
 func (dd DockerDiscovery) removeContainerInfo(containerID string) error {
+	dd.mutex.Lock()
+	defer dd.mutex.Unlock()
+
 	containerInfo, ok := dd.containerInfoMap[containerID]
 	if !ok {
 		log.Printf("[docker] No entry associated with the container %s", containerID[:12])
