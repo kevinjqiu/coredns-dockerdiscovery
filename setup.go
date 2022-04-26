@@ -20,7 +20,7 @@ func init() {
 }
 
 // TODO(kevinjqiu): add docker endpoint verification
-func createPlugin(c *caddy.Controller) (DockerDiscovery, error) {
+func createPlugin(c *caddy.Controller) (*DockerDiscovery, error) {
 	dd := NewDockerDiscovery(defaultDockerEndpoint)
 	labelResolver := &LabelResolver{hostLabel: "coredns.dockerdiscovery.host"}
 	dd.resolvers = append(dd.resolvers, labelResolver)
