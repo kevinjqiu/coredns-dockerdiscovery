@@ -41,14 +41,14 @@ type DockerDiscovery struct {
 }
 
 // NewDockerDiscovery constructs a new DockerDiscovery object
-func NewDockerDiscovery(dockerEndpoint string) DockerDiscovery {
-	return DockerDiscovery{
+func NewDockerDiscovery(dockerEndpoint string) *DockerDiscovery {
+	return &DockerDiscovery{
 		dockerEndpoint:   dockerEndpoint,
 		containerInfoMap: make(ContainerInfoMap),
 	}
 }
 
-func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
+func (dd *DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Container) ([]string, error) {
 	var domains []string
 	for _, resolver := range dd.resolvers {
 		var d, err = resolver.resolve(container)
@@ -61,7 +61,7 @@ func (dd DockerDiscovery) resolveDomainsByContainer(container *dockerapi.Contain
 	return domains, nil
 }
 
-func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerInfo, error) {
+func (dd *DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerInfo, error) {
 	dd.mutex.RLock()
 	defer dd.mutex.RUnlock()
 
@@ -77,7 +77,7 @@ func (dd DockerDiscovery) containerInfoByDomain(requestName string) (*ContainerI
 }
 
 // ServeDNS implements plugin.Handler
-func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (dd *DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 	var answers []dns.RR
 	switch state.QType() {
@@ -108,11 +108,11 @@ func (dd DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r 
 }
 
 // Name implements plugin.Handler
-func (dd DockerDiscovery) Name() string {
+func (dd *DockerDiscovery) Name() string {
 	return "docker"
 }
 
-func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (net.IP, error) {
+func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container) (net.IP, error) {
 
 	// save this away
 	netName, hasNetName := container.Config.Labels["coredns.dockerdiscovery.network"]
@@ -158,7 +158,7 @@ func (dd DockerDiscovery) getContainerAddress(container *dockerapi.Container) (n
 	return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
 }
 
-func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
+func (dd *DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
 	dd.mutex.Lock()
 	defer dd.mutex.Unlock()
 
@@ -190,7 +190,7 @@ func (dd DockerDiscovery) updateContainerInfo(container *dockerapi.Container) er
 	return nil
 }
 
-func (dd DockerDiscovery) removeContainerInfo(containerID string) error {
+func (dd *DockerDiscovery) removeContainerInfo(containerID string) error {
 	dd.mutex.Lock()
 	defer dd.mutex.Unlock()
 
@@ -205,7 +205,7 @@ func (dd DockerDiscovery) removeContainerInfo(containerID string) error {
 	return nil
 }
 
-func (dd DockerDiscovery) start() error {
+func (dd *DockerDiscovery) start() error {
 	log.Println("[docker] start")
 	events := make(chan *dockerapi.APIEvents)
 
