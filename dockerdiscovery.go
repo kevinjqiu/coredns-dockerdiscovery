@@ -145,10 +145,18 @@ func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container) (
 		}
 	}
 
-	network, ok := container.NetworkSettings.Networks[networkMode]
+	var (
+		network dockerapi.ContainerNetwork
+		ok      = false
+	)
+
 	if hasNetName {
 		log.Printf("[docker] network name %s specified (%s)", netName, container.ID[:12])
 		network, ok = container.NetworkSettings.Networks[netName]
+	} else if len(container.NetworkSettings.Networks) == 1 {
+		for netName, network = range container.NetworkSettings.Networks {
+			ok = true
+		}
 	}
 
 	if !ok { // sometime while "network:disconnect" event fire
