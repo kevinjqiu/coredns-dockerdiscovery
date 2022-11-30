@@ -1,8 +1,8 @@
-FROM golang:1.16.5-stretch
+FROM golang:1.17.13-bullseye
 
-RUN go mod download github.com/coredns/coredns@v1.8.4
+RUN go mod download github.com/coredns/coredns@v1.9.3
 
-WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v1.8.4
+WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v1.9.3
 RUN go mod download
 
 RUN sed -i '50 i docker:github.com/kevinjqiu/coredns-dockerdiscovery' plugin.cfg

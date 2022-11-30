@@ -1,6 +1,6 @@
 module github.com/kevinjqiu/coredns-dockerdiscovery
 
-go 1.16
+go 1.17
 
 require (
 	github.com/Microsoft/hcsshim v0.8.17 // indirect
