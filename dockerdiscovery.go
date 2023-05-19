@@ -18,6 +18,7 @@ import (
 type ContainerInfo struct {
 	container *dockerapi.Container
 	address   net.IP
+	address6  net.IP
 	domains   []string // resolved domain
 }
 
@@ -37,7 +38,7 @@ type DockerDiscovery struct {
 
 	mutex            sync.RWMutex
 	containerInfoMap ContainerInfoMap
-	domainIPMap      map[string]*net.IP
+	ttl              uint32
 }
 
 // NewDockerDiscovery constructs a new DockerDiscovery object
@@ -45,6 +46,7 @@ func NewDockerDiscovery(dockerEndpoint string) *DockerDiscovery {
 	return &DockerDiscovery{
 		dockerEndpoint:   dockerEndpoint,
 		containerInfoMap: make(ContainerInfoMap),
+		ttl:              3600,
 	}
 }
 
@@ -84,8 +86,12 @@ func (dd *DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r
 	case dns.TypeA:
 		containerInfo, _ := dd.containerInfoByDomain(state.QName())
 		if containerInfo != nil {
-			log.Printf("[docker] Found ip %v for host %s", containerInfo.address, state.QName())
-			answers = a(state.Name(), []net.IP{containerInfo.address})
+			answers = getAnswer(state.Name(), []net.IP{containerInfo.address}, dd.ttl, false)
+		}
+	case dns.TypeAAAA:
+		containerInfo, _ := dd.containerInfoByDomain(state.QName())
+		if containerInfo != nil && containerInfo.address6 != nil {
+			answers = getAnswer(state.Name(), []net.IP{containerInfo.address6}, dd.ttl, true)
 		}
 	}
 
@@ -95,7 +101,7 @@ func (dd *DockerDiscovery) ServeDNS(ctx context.Context, w dns.ResponseWriter, r
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative, m.RecursionAvailable, m.Compress = true, true, true
+	m.Authoritative, m.RecursionAvailable, m.Compress = true, false, true
 	m.Answer = answers
 
 	state.SizeAndDo(m)
@@ -112,7 +118,7 @@ func (dd *DockerDiscovery) Name() string {
 	return "docker"
 }
 
-func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container) (net.IP, error) {
+func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container, v6 bool) (net.IP, error) {
 
 	// save this away
 	netName, hasNetName := container.Config.Labels["coredns.dockerdiscovery.network"]
@@ -120,17 +126,21 @@ func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container) (
 	var networkMode string
 
 	for {
-		if container.NetworkSettings.IPAddress != "" && !hasNetName {
+		if container.NetworkSettings.IPAddress != "" && !hasNetName && !v6 {
 			return net.ParseIP(container.NetworkSettings.IPAddress), nil
+		}
+
+		if container.NetworkSettings.GlobalIPv6Address != "" && !hasNetName && v6 {
+			return net.ParseIP(container.NetworkSettings.GlobalIPv6Address), nil
 		}
 
 		networkMode = container.HostConfig.NetworkMode
 
 		// TODO: Deal with containers run with host ip (--net=host)
-		// if networkMode == "host" {
-		// 	log.Println("[docker] Container uses host network")
-		// 	return nil, nil
-		// }
+		if networkMode == "host" {
+			log.Println("[docker] Container uses host network")
+			return nil, nil
+		}
 
 		if strings.HasPrefix(networkMode, "container:") {
 			log.Printf("Container %s is in another container's network namspace", container.ID[:12])
@@ -163,7 +173,13 @@ func (dd *DockerDiscovery) getContainerAddress(container *dockerapi.Container) (
 		return nil, fmt.Errorf("unable to find network settings for the network %s", networkMode)
 	}
 
-	return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
+	if !v6 {
+		return net.ParseIP(network.IPAddress), nil // ParseIP return nil when IPAddress equals ""
+	} else if v6 && len(network.GlobalIPv6Address) > 0 {
+		return net.ParseIP(network.GlobalIPv6Address), nil
+	}
+
+	return nil, nil
 }
 
 func (dd *DockerDiscovery) updateContainerInfo(container *dockerapi.Container) error {
@@ -171,21 +187,24 @@ func (dd *DockerDiscovery) updateContainerInfo(container *dockerapi.Container) e
 	defer dd.mutex.Unlock()
 
 	_, isExist := dd.containerInfoMap[container.ID]
-	containerAddress, err := dd.getContainerAddress(container)
 	if isExist { // remove previous resolved container info
 		delete(dd.containerInfoMap, container.ID)
 	}
 
+	containerAddress, err := dd.getContainerAddress(container, false)
 	if err != nil || containerAddress == nil {
 		log.Printf("[docker] Remove container entry %s (%s)", normalizeContainerName(container), container.ID[:12])
 		return err
 	}
+
+	containerAddress6, err := dd.getContainerAddress(container, true)
 
 	domains, _ := dd.resolveDomainsByContainer(container)
 	if len(domains) > 0 {
 		dd.containerInfoMap[container.ID] = &ContainerInfo{
 			container: container,
 			address:   containerAddress,
+			address6:  containerAddress6,
 			domains:   domains,
 		}
 
@@ -232,7 +251,7 @@ func (dd *DockerDiscovery) start() error {
 			// TODO err
 		}
 		if err := dd.updateContainerInfo(container); err != nil {
-			log.Printf("[docker] Error adding A record for container %s: %s\n", container.ID[:12], err)
+			log.Printf("[docker] Error adding A/AAAA records for container %s: %s\n", container.ID[:12], err)
 		}
 	}
 
@@ -241,7 +260,7 @@ func (dd *DockerDiscovery) start() error {
 			event := fmt.Sprintf("%s:%s", msg.Type, msg.Action)
 			switch event {
 			case "container:start":
-				log.Println("[docker] New container spawned. Attempt to add A record for it")
+				log.Println("[docker] New container spawned. Attempt to add A/AAAA records for it")
 
 				container, err := dd.dockerClient.InspectContainerWithOptions(dockerapi.InspectContainerOptions{ID: msg.Actor.ID})
 				if err != nil {
@@ -249,12 +268,12 @@ func (dd *DockerDiscovery) start() error {
 					return
 				}
 				if err := dd.updateContainerInfo(container); err != nil {
-					log.Printf("[docker] Error adding A record for container %s: %s", container.ID[:12], err)
+					log.Printf("[docker] Error adding A/AAAA records for container %s: %s", container.ID[:12], err)
 				}
 			case "container:die":
-				log.Println("[docker] Container being stopped. Attempt to remove its A record from the DNS", msg.Actor.ID[:12])
+				log.Println("[docker] Container being stopped. Attempt to remove its A/AAAA records from the DNS", msg.Actor.ID[:12])
 				if err := dd.removeContainerInfo(msg.Actor.ID); err != nil {
-					log.Printf("[docker] Error deleting A record for container: %s: %s", msg.Actor.ID[:12], err)
+					log.Printf("[docker] Error deleting A/AAAA records for container: %s: %s", msg.Actor.ID[:12], err)
 				}
 			case "network:connect":
 				// take a look https://gist.github.com/josefkarasek/be9bac36921f7bc9a61df23451594fbf for example of same event's types attributes
@@ -266,7 +285,7 @@ func (dd *DockerDiscovery) start() error {
 					return
 				}
 				if err := dd.updateContainerInfo(container); err != nil {
-					log.Printf("[docker] Error adding A record for container %s: %s", container.ID[:12], err)
+					log.Printf("[docker] Error adding A/AAAA records for container %s: %s", container.ID[:12], err)
 				}
 			case "network:disconnect":
 				log.Printf("[docker] Container %s being disconnected from network %s", msg.Actor.Attributes["container"][:12], msg.Actor.Attributes["name"])
@@ -277,7 +296,7 @@ func (dd *DockerDiscovery) start() error {
 					return
 				}
 				if err := dd.updateContainerInfo(container); err != nil {
-					log.Printf("[docker] Error adding A record for container %s: %s", container.ID[:12], err)
+					log.Printf("[docker] Error adding A/AAAA records for container %s: %s", container.ID[:12], err)
 				}
 			}
 		}(msg)
@@ -286,19 +305,31 @@ func (dd *DockerDiscovery) start() error {
 	return errors.New("docker event loop closed")
 }
 
-// a takes a slice of net.IPs and returns a slice of A RRs.
-func a(zone string, ips []net.IP) []dns.RR {
+// getAnswer function takes a slice of net.IPs and returns a slice of A/AAAA RRs.
+func getAnswer(zone string, ips []net.IP, ttl uint32, v6 bool) []dns.RR {
 	answers := []dns.RR{}
 	for _, ip := range ips {
-		r := new(dns.A)
-		r.Hdr = dns.RR_Header{
-			Name:   zone,
-			Rrtype: dns.TypeA,
-			Class:  dns.ClassINET,
-			Ttl:    3600,
+		if !v6 {
+			record := new(dns.A)
+			record.Hdr = dns.RR_Header{
+				Name:   zone,
+				Rrtype: dns.TypeA,
+				Class:  dns.ClassINET,
+				Ttl:    ttl,
+			}
+			record.A = ip
+			answers = append(answers, record)
+		} else if v6 {
+			record := new(dns.AAAA)
+			record.Hdr = dns.RR_Header{
+				Name:   zone,
+				Rrtype: dns.TypeAAAA,
+				Class:  dns.ClassINET,
+				Ttl:    ttl,
+			}
+			record.AAAA = ip
+			answers = append(answers, record)
 		}
-		r.A = ip
-		answers = append(answers, r)
 	}
 	return answers
 }
