@@ -1,6 +1,8 @@
 package dockerdiscovery
 
 import (
+	"strconv"
+
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 
@@ -79,6 +81,17 @@ func createPlugin(c *caddy.Controller) (*DockerDiscovery, error) {
 					return dd, c.ArgErr()
 				}
 				labelResolver.hostLabel = c.Val()
+			case "ttl":
+				if !c.NextArg() {
+					return dd, c.ArgErr()
+				}
+				ttl, err := strconv.ParseUint(c.Val(), 10, 32)
+				if err != nil {
+					return dd, err
+				}
+				if ttl > 0 {
+					dd.ttl = uint32(ttl)
+				}
 			default:
 				return dd, c.Errf("unknown property: '%s'", c.Val())
 			}

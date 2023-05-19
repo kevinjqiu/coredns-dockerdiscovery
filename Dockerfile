@@ -1,16 +1,24 @@
-FROM golang:1.16.5-stretch
+ARG GOLANG_VERS=1.18
+ARG ALPINE_VERS=3.17
 
-RUN go mod download github.com/coredns/coredns@v1.8.4
+FROM golang:${GOLANG_VERS}-alpine${ALPINE_VERS}
 
-WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v1.8.4
+ARG CGO_ENABLED=1
+ARG PLUGIN_PRIO=50
+ARG COREDNS_VERS=1.10.1
+
+RUN go mod download github.com/coredns/coredns@v${COREDNS_VERS}
+WORKDIR $GOPATH/pkg/mod/github.com/coredns/coredns@v${COREDNS_VERS}
 RUN go mod download
 
-RUN sed -i '50 i docker:github.com/kevinjqiu/coredns-dockerdiscovery' plugin.cfg
-ENV CGO_ENABLED=0
-RUN go generate coredns.go && go build -mod=mod -o=/usr/local/bin/coredns
+COPY --link ./ $GOPATH/pkg/mod/github.com/kevinjqiu/coredns-dockerdiscovery
+RUN sed -i "s/^#.*//g; /^$/d; $PLUGIN_PRIO i docker:dockerdiscovery" plugin.cfg \
+    && go mod edit -replace\
+    dockerdiscovery=$GOPATH/pkg/mod/github.com/kevinjqiu/coredns-dockerdiscovery\
+    && go generate coredns.go && go build -mod=mod -o=/usr/local/bin/coredns && \
+    apk --no-cache add binutils && strip -vs /usr/local/bin/coredns
 
-FROM alpine:3.13.5
-
+FROM alpine:${ALPINE_VERS}
 RUN apk --no-cache add ca-certificates
 COPY --from=0 /usr/local/bin/coredns /usr/local/bin/coredns
 
